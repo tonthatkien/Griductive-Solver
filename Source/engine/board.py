@@ -89,7 +89,7 @@ def col_cells(n: int, col_letter: str) -> List[str]:
 
 def neighbor_cells(n: int, cell: str) -> List[str]:
     """8 hướng, không gồm chính nó, theo thứ tự row-major. Raises ValueError nếu ô ngoài lưới."""
-    cell_index(cell, n)  # chỉ để validate
+    cell_index(cell, n)
     r0, c0 = parse_cell(cell)
     return [
         cell_id(r, c)

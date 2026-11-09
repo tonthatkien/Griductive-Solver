@@ -4,7 +4,6 @@ from engine import board
 
 
 class TestBoard(unittest.TestCase):
-    # --- Các test đã có sẵn[cite: 1] ---
     def test_neighbors_of_corner_has_three_cells(self):
         self.assertEqual(sorted(board.neighbor_cells(3, "A1")), ["A2", "B1", "B2"])
 
@@ -19,9 +18,7 @@ class TestBoard(unittest.TestCase):
         self.assertEqual(board.all_cells(2), ["A1", "B1", "A2", "B2"])
 
     def test_neighbors_edge_and_order(self):
-        # Neighbor ở biên có 5 ô
         self.assertEqual(len(board.neighbor_cells(3, "B1")), 5)
-        # Neighbor không chứa chính nó và đúng thứ tự row-major
         self.assertEqual(
             board.neighbor_cells(3, "B2"),
             ["A1", "B1", "C1", "A2", "C2", "A3", "B3", "C3"]
