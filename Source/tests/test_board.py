@@ -18,7 +18,6 @@ class TestBoard(unittest.TestCase):
     def test_row_major_order(self):
         self.assertEqual(board.all_cells(2), ["A1", "B1", "A2", "B2"])
 
-    # --- Các test bổ sung cho Task A1 ---
     def test_neighbors_edge_and_order(self):
         # Neighbor ở biên có 5 ô
         self.assertEqual(len(board.neighbor_cells(3, "B1")), 5)
@@ -66,6 +65,24 @@ class TestBoard(unittest.TestCase):
     def test_first_aux_var(self):
         self.assertEqual(board.first_aux_var(3), 10)
 
+    def test_col_cells_invalid_raises(self):
+        for bad in ["", "AB", "BC", "D", "1"]:
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                board.col_cells(3, bad)
+
+    def test_row_cells_invalid_raises(self):
+        for bad in [0, 4, -1]:
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                board.row_cells(3, bad)
+
+    def test_parse_cell_invalid_raises(self):
+        for bad in ["", "A", "2C", "A-1", "11", "AA1"]:
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                board.parse_cell(bad)
+
+    def test_is_valid_cell_rejects_non_canonical(self):
+        self.assertFalse(board.is_valid_cell("a1", 3))    
+        self.assertFalse(board.is_valid_cell("A01", 3))   
 
 if __name__ == "__main__":
     unittest.main()

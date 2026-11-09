@@ -10,8 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        # Đổi theo tên thư mục nộp bài thật (MSSV1_MSSV2_...)
-        working-directory: MSSV1_MSSV2_MSSV3_MSSV4/Source
+        working-directory: Source
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

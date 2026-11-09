@@ -80,9 +80,10 @@ def row_cells(n: int, row_number: int) -> List[str]:
 
 def col_cells(n: int, col_letter: str) -> List[str]:
     """Các ô của một cột (chữ cái), từ trên xuống."""
-    c = COLS.find(col_letter.upper())
-    if col_letter == "" or not 0 <= c < n:
+    letter = col_letter.upper()
+    if len(letter) != 1 or letter not in COLS[:n]:
         raise ValueError(f"Cột {col_letter!r} ngoài lưới {n}x{n}")
+    c = COLS.index(letter)
     return [cell_id(r, c) for r in range(n)]
 
 
