@@ -103,6 +103,7 @@ Tham số `region` trong các clue đếm số lượng phải tuân theo một 
   "status": "INNOCENT"
 }
 ```
+`status` là **bắt buộc** với `FACT` (không có giá trị mặc định).
 
 **2. SAME_STATUS**
 
@@ -214,7 +215,10 @@ So sánh số lượng giữa hai vùng. `op` nhận một trong năm giá trị
 
 Mọi clue đều **đúng** (là sự thật về lưới) khi được lật. Các quy ước chung:
 
-- `status` ∈ {`CRIMINAL`, `INNOCENT`}. Nếu bỏ qua thì **mặc định `CRIMINAL`**.
+- `status` ∈ {`CRIMINAL`, `INNOCENT`}.
+- **`FACT` bắt buộc có `status`** (không có giá trị mặc định); thiếu `status` là file puzzle **không hợp lệ**.
+- Các clue còn lại (`EXACTLY`, `AT_LEAST`, `AT_MOST`, `PARITY`, `COMPARE`): nếu bỏ qua `status` thì **mặc định `CRIMINAL`**.
+- `SAME_STATUS` và `DIFFERENT_STATUS` không dùng `status` (ngữ nghĩa so sánh đã cố định).
 - Một ô "có trạng thái `status`" nghĩa là: `True` nếu `status = CRIMINAL`, `False` nếu `status = INNOCENT`.
 
 | Clue | Điều kiện đúng |
@@ -245,9 +249,10 @@ Hệ quả cho từng module:
 3. `initially_revealed` **không rỗng**, không trùng, và mọi phần tử là cell hợp lệ.
 4. `0 <= k <= |R|` với `|R|` là số ô của vùng (và `k` là int).
 5. `status` ∈ {`CRIMINAL`, `INNOCENT`}; `parity` ∈ {`EVEN`, `ODD`}; `op` ∈ {`GT`, `GE`, `EQ`, `LE`, `LT`}.
-6. `letter` viết hoa; `number` >= 1; các `cells` trong region `list` không trùng nhau.
-7. Mọi cell được tham chiếu trong clue (`target`, `cell1`, `cell2`, `region.cell`, `region.cells`) nằm trong lưới.
-8. Puzzle có **nghiệm duy nhất** (`uniqueness_check`).
+6. **`FACT` phải có khóa `status`** với giá trị ∈ {`CRIMINAL`, `INNOCENT`}. Các clue khác nếu có `status` thì cũng phải hợp lệ; nếu thiếu thì loader gán mặc định `CRIMINAL` (trừ `SAME_STATUS`/`DIFFERENT_STATUS`).
+7. `letter` viết hoa; `number` >= 1; các `cells` trong region `list` không trùng nhau.
+8. Mọi cell được tham chiếu trong clue (`target`, `cell1`, `cell2`, `region.cell`, `region.cells`) nằm trong lưới.
+9. Puzzle có **nghiệm duy nhất** (`uniqueness_check`).
 
 ## 3. Ranh giới Engine / Agent
 
