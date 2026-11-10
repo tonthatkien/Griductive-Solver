@@ -42,7 +42,7 @@ Ví dụ dưới đây **đã rút gọn** (chỉ 1 character, chỉ để minh 
 - Mỗi nhân vật có đúng **1 clue** (lộ ra khi thẻ được lật).
 - `criminal` là nhãn **ẨN**, chỉ `GameEngine` được đọc.
 - Mỗi puzzle **PHẢI có nghiệm duy nhất** (kiểm tra bằng `uniqueness_check` trước khi đưa vào `data/`).
-- Tên khóa tham chiếu ô khác nhau theo từng loại clue (`target`, `cell1`/`cell2`, `cell`); mỗi loại được định nghĩa cố định ở mục 2.2, không tự đặt tên khác.
+- Tên khóa tham chiếu ô khác nhau theo từng loại clue (`target`, `cell1`/`cell2`, và các khóa trong `region` như `cell`, `cells`); mỗi loại được định nghĩa cố định ở **mục 2.1 (Region)** và **mục 2.2 (Clue)**, không tự đặt tên khác.
 
 ### 2.1. Cú pháp 4 loại Region (Vùng)
 
@@ -232,6 +232,8 @@ Mọi clue đều **đúng** (là sự thật về lưới) khi được lật. 
 | `PARITY` | số ô trong `region` có trạng thái `status` là chẵn (`EVEN`) hoặc lẻ (`ODD`) |
 | `COMPARE` | đếm số ô có trạng thái `status` ở **cả `region1` và `region2`**, rồi so sánh `count(region1) op count(region2)` |
 
+> Quy ước: với `PARITY`, `count = 0` được coi là **chẵn** (`EVEN` đúng, `ODD` sai).
+
 Hệ quả cho từng module:
 
 - **Encoder (`cnf_encoder`):** khi `status = INNOCENT`, đảo cực literal của các ô trong vùng (đếm literal âm thay vì dương).
@@ -250,9 +252,10 @@ Hệ quả cho từng module:
 4. `0 <= k <= |R|` với `|R|` là số ô của vùng (và `k` là int).
 5. `status` ∈ {`CRIMINAL`, `INNOCENT`}; `parity` ∈ {`EVEN`, `ODD`}; `op` ∈ {`GT`, `GE`, `EQ`, `LE`, `LT`}.
 6. **`FACT` phải có khóa `status`** với giá trị ∈ {`CRIMINAL`, `INNOCENT`}. Các clue khác nếu có `status` thì cũng phải hợp lệ; nếu thiếu thì loader gán mặc định `CRIMINAL` (trừ `SAME_STATUS`/`DIFFERENT_STATUS`).
-7. `letter` viết hoa; `number` >= 1; các `cells` trong region `list` không trùng nhau.
-8. Mọi cell được tham chiếu trong clue (`target`, `cell1`, `cell2`, `region.cell`, `region.cells`) nằm trong lưới.
-9. Puzzle có **nghiệm duy nhất** (`uniqueness_check`).
+7. Với `SAME_STATUS` và `DIFFERENT_STATUS`: `cell1` ≠ `cell2`.
+8. `letter` viết hoa; `number` >= 1; các `cells` trong region `list` không trùng nhau.
+9. Mọi cell được tham chiếu trong clue (`target`, `cell1`, `cell2`, `region.cell`, `region.cells`) nằm trong lưới.
+10. Puzzle có **nghiệm duy nhất** (`uniqueness_check`).
 
 ## 3. Ranh giới Engine / Agent
 
