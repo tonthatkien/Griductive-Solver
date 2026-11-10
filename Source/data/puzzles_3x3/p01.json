@@ -27,7 +27,7 @@
       "name": "Derek",
       "profession": "Teacher",
       "criminal": false,
-      "clue": { "type": "DIFFERENT_STATUS", "cell1": "A2", "cell2": "B2" }
+      "clue": { "type": "EXACTLY", "region": { "type": "row", "number": 3 }, "k": 1, "status": "CRIMINAL" }
     },
     {
       "cell": "B2",
