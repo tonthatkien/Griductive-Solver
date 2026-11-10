@@ -2,20 +2,23 @@
 
 Định dạng clue trong file JSON (xem docs/INTERFACES.md):
 
-  FACT       {"cell": "A1", "status": "CRIMINAL"|"INNOCENT"}
-  SAME       {"a": "A1", "b": "B2"}
-  DIFFERENT  {"a": "A1", "b": "B2"}
-  EXACTLY    {"region": <region>, "k": 2}
-  AT_LEAST   {"region": <region>, "k": 2}
-  AT_MOST    {"region": <region>, "k": 2}
-  -- Extension (gợi ý, nhóm có thể đổi) --
-  PARITY     {"region": <region>, "parity": "EVEN"|"ODD"}      # số criminal chẵn/lẻ
-  COMPARE    {"left": <region>, "right": <region>, "op": "GT"|"GE"|"EQ"|"LE"|"LT"}
+  FACT              {"target": "A1", "status": "CRIMINAL"|"INNOCENT"}
+  SAME_STATUS       {"cell1": "A1", "cell2": "B2"}
+  DIFFERENT_STATUS  {"cell1": "A1", "cell2": "B2"}
+  EXACTLY           {"region": <region>, "k": 2, "status": ...}
+  AT_LEAST          {"region": <region>, "k": 2, "status": ...}
+  AT_MOST           {"region": <region>, "k": 2, "status": ...}
+  -- Extension --
+  PARITY            {"region": <region>, "parity": "EVEN"|"ODD", "status": ...}
+  COMPARE           {"region1": <region>, "region2": <region>,
+                     "op": "GT"|"GE"|"EQ"|"LE"|"LT", "status": ...}
 
-  <region> = {"type": "row", "index": 2}
-           | {"type": "col", "index": "B"}
+  status ∈ {"CRIMINAL", "INNOCENT"}; bỏ qua thì mặc định "CRIMINAL" (dùng clue_status()).
+
+  <region> = {"type": "row", "number": 2}
+           | {"type": "col", "letter": "B"}
            | {"type": "neighbors", "cell": "C2"}
-           | {"type": "cells", "cells": ["A1", "B3"]}
+           | {"type": "list", "cells": ["A1", "B3"]}
 """
 from dataclasses import dataclass, field
 from typing import Any, Dict, List
@@ -31,14 +34,15 @@ class Clue:
     params: Dict[str, Any] = field(default_factory=dict, hash=False, compare=False)
 
 
-CORE_TYPES = ("FACT", "SAME", "DIFFERENT", "EXACTLY", "AT_LEAST", "AT_MOST")
+CORE_TYPES = ("FACT", "SAME_STATUS", "DIFFERENT_STATUS", "EXACTLY", "AT_LEAST", "AT_MOST")
 EXT_TYPES = ("PARITY", "COMPARE")
 
 # Không import từ game_state (game_state đã import clue -> vòng lặp import).
 FACT_STATUSES = ("CRIMINAL", "INNOCENT")
 COUNT_TYPES = ("EXACTLY", "AT_LEAST", "AT_MOST")
-PAIR_TYPES = ("SAME", "DIFFERENT")
+PAIR_TYPES = ("SAME_STATUS", "DIFFERENT_STATUS")
 PARITIES = ("EVEN", "ODD")
+DEFAULT_STATUS = "CRIMINAL"
 COMPARE_OPS = ("GT", "GE", "EQ", "LE", "LT")
 
 
@@ -49,18 +53,23 @@ def clue_from_dict(owner: str, d: dict) -> Clue:
     return Clue(id=f"clue_{owner}", owner=owner, type=t, params=d)
 
 
+def clue_status(clue: Clue) -> str:
+    """status của clue; bỏ qua thì mặc định CRIMINAL (encoder C và semantic D đều gọi hàm này)."""
+    return clue.params.get("status", DEFAULT_STATUS)
+
+
 def resolve_region(region: dict, n: int) -> List[str]:
     """Region spec -> list cell id (không trùng, giữ thứ tự row-major).
     Scope A viết; Scope C, D dùng cho encoder + evaluator; Scope F dùng cho highlight.
     """
     t = region["type"]
     if t == "row":
-        cells = board.row_cells(n, int(region["index"]))
+        cells = board.row_cells(n, int(region["number"]))
     elif t == "col":
-        cells = board.col_cells(n, region["index"])
+        cells = board.col_cells(n, region["letter"])
     elif t == "neighbors":
         cells = board.neighbor_cells(n, region["cell"])
-    elif t == "cells":
+    elif t == "list":
         cells = list(region["cells"])
     else:
         raise ValueError(f"Unknown region type: {t}")
@@ -76,8 +85,8 @@ def _sorted_unique(cells: List[str], n: int) -> List[str]:
 def clue_cells(clue: Clue, n: int) -> List[str]:
     """Các ô mà clue nhắc tới (để GUI highlight), không trùng, thứ tự row-major.
 
-    FACT -> [cell]; SAME/DIFFERENT -> [a, b]; counting/PARITY -> resolve_region;
-    COMPARE -> left + right (hợp của hai vùng).
+    FACT -> [target]; SAME_STATUS/DIFFERENT_STATUS -> [cell1, cell2]; counting/PARITY -> resolve_region;
+    COMPARE -> region1 + region2 (hợp của hai vùng).
     Không gồm ô `owner` trừ khi chính clue nhắc tới ô đó.
 
     Raises:
@@ -85,13 +94,13 @@ def clue_cells(clue: Clue, n: int) -> List[str]:
     """
     t, p = clue.type, clue.params
     if t == "FACT":
-        cells = [p["cell"]]
+        cells = [p["target"]]
     elif t in PAIR_TYPES:
-        cells = [p["a"], p["b"]]
+        cells = [p["cell1"], p["cell2"]]
     elif t in COUNT_TYPES or t == "PARITY":
         cells = resolve_region(p["region"], n)
     elif t == "COMPARE":
-        cells = resolve_region(p["left"], n) + resolve_region(p["right"], n)
+        cells = resolve_region(p["region1"], n) + resolve_region(p["region2"], n)
     else:
         raise ValueError(f"Kiểu clue không hợp lệ: {t!r}")
     return _sorted_unique(cells, n)
@@ -109,23 +118,23 @@ def _check_region(region: Any, n: int, what: str) -> List[str]:
         raise ValueError(f"{what}: region thiếu hoặc sai dạng: {region!r}")
     t = region["type"]
     if t == "row":
-        idx = region.get("index")
+        idx = region.get("number")
         if isinstance(idx, bool) or not isinstance(idx, int) or not 1 <= idx <= n:
             raise ValueError(f"{what}: hàng {idx!r} ngoài lưới {n}x{n}")
     elif t == "col":
-        idx = region.get("index")
+        idx = region.get("letter")
         if not isinstance(idx, str) or len(idx) != 1 or idx not in board.COLS[:n]:
             raise ValueError(f"{what}: cột {idx!r} ngoài lưới {n}x{n}")
     elif t == "neighbors":
         _check_cell(region.get("cell"), n, what)
-    elif t == "cells":
+    elif t == "list":
         raw = region.get("cells")
         if not isinstance(raw, list) or not raw:
-            raise ValueError(f"{what}: region 'cells' rỗng hoặc không phải list")
+            raise ValueError(f"{what}: region 'list' có 'cells' rỗng hoặc không phải list")
         for c in raw:
             _check_cell(c, n, what)
         if len(set(raw)) != len(raw):
-            raise ValueError(f"{what}: region 'cells' có ô trùng: {raw!r}")
+            raise ValueError(f"{what}: region 'list' có ô trùng: {raw!r}")
     else:
         raise ValueError(f"{what}: kiểu region lạ: {t!r}")
     cells = resolve_region(region, n)
@@ -134,38 +143,46 @@ def _check_region(region: Any, n: int, what: str) -> List[str]:
     return cells
 
 
+def _check_status(p: dict, what: str) -> None:
+    """status là tùy chọn (mặc định CRIMINAL); nếu có thì phải thuộc FACT_STATUSES."""
+    if "status" in p and p["status"] not in FACT_STATUSES:
+        raise ValueError(f"{what}: status {p['status']!r} phải thuộc {FACT_STATUSES}")
+
+
 def validate_clue(clue: Clue, n: int) -> None:
     """Raise ValueError nếu clue sai; hợp lệ thì trả về None. Kiểm tra:
        - owner và mọi ô nhắc tới nằm trong lưới (đúng dạng chuẩn, vd 'C2' chứ không 'c2')
        - region đúng kiểu, không rỗng; 'cells' không có ô trùng
        - 0 <= k <= |region| với EXACTLY/AT_LEAST/AT_MOST (k là int, không phải bool)
        - SAME/DIFFERENT: hai ô khác nhau (clue về một ô với chính nó vô nghĩa)
-       - type, status, parity, op hợp lệ; thiếu tham số cũng báo ValueError (không KeyError)
+       - type, status (tùy chọn, mặc định CRIMINAL), parity, op hợp lệ; thiếu tham số cũng báo ValueError (không KeyError)
     """
     t, p = clue.type, clue.params
     _check_cell(clue.owner, n, "owner")
     if t == "FACT":
-        _check_cell(p.get("cell"), n, t)
-        if p.get("status") not in FACT_STATUSES:
-            raise ValueError(f"{t}: status {p.get('status')!r} phải thuộc {FACT_STATUSES}")
+        _check_cell(p.get("target"), n, t)
+        _check_status(p, t)
     elif t in PAIR_TYPES:
-        _check_cell(p.get("a"), n, t)
-        _check_cell(p.get("b"), n, t)
-        if p["a"] == p["b"]:
-            raise ValueError(f"{t}: hai ô phải khác nhau, nhận {p['a']!r}")
+        _check_cell(p.get("cell1"), n, t)
+        _check_cell(p.get("cell2"), n, t)
+        if p["cell1"] == p["cell2"]:
+            raise ValueError(f"{t}: hai ô phải khác nhau, nhận {p['cell1']!r}")
     elif t in COUNT_TYPES:
         size = len(_check_region(p.get("region"), n, t))
         k = p.get("k")
         if isinstance(k, bool) or not isinstance(k, int) or not 0 <= k <= size:
             raise ValueError(f"{t}: k={k!r} phải là số nguyên trong [0, {size}]")
+        _check_status(p, t)
     elif t == "PARITY":
         _check_region(p.get("region"), n, t)
         if p.get("parity") not in PARITIES:
             raise ValueError(f"{t}: parity {p.get('parity')!r} phải thuộc {PARITIES}")
+        _check_status(p, t)
     elif t == "COMPARE":
-        _check_region(p.get("left"), n, f"{t}.left")
-        _check_region(p.get("right"), n, f"{t}.right")
+        _check_region(p.get("region1"), n, f"{t}.region1")
+        _check_region(p.get("region2"), n, f"{t}.region2")
         if p.get("op") not in COMPARE_OPS:
             raise ValueError(f"{t}: op {p.get('op')!r} phải thuộc {COMPARE_OPS}")
+        _check_status(p, t)
     else:
         raise ValueError(f"Kiểu clue không hợp lệ: {t!r}")

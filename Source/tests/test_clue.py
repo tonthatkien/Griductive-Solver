@@ -1,7 +1,7 @@
 """Test cho engine/clue.py (việc A2): clue_cells, validate_clue."""
 import unittest
 
-from engine.clue import Clue, clue_cells, clue_from_dict, validate_clue
+from engine.clue import Clue, clue_cells, clue_from_dict, clue_status, validate_clue
 
 N = 3
 
@@ -10,20 +10,20 @@ def mk(type_: str, owner: str = "A1", **params) -> Clue:
     return Clue(id=f"clue_{owner}", owner=owner, type=type_, params=params)
 
 
-ROW2 = {"type": "row", "index": 2}
-COLB = {"type": "col", "index": "B"}
+ROW2 = {"type": "row", "number": 2}
+COLB = {"type": "col", "letter": "B"}
 NEI_A1 = {"type": "neighbors", "cell": "A1"}
 NEI_B2 = {"type": "neighbors", "cell": "B2"}
 
 
 class ClueCellsTest(unittest.TestCase):
     def test_fact_returns_its_cell(self):
-        self.assertEqual(clue_cells(mk("FACT", cell="B2", status="CRIMINAL"), N), ["B2"])
+        self.assertEqual(clue_cells(mk("FACT", target="B2", status="CRIMINAL"), N), ["B2"])
 
     def test_same_and_different_return_both_cells_row_major(self):
-        for t in ("SAME", "DIFFERENT"):
+        for t in ("SAME_STATUS", "DIFFERENT_STATUS"):
             with self.subTest(type=t):
-                self.assertEqual(clue_cells(mk(t, a="C1", b="A1"), N), ["A1", "C1"])
+                self.assertEqual(clue_cells(mk(t, cell1="C1", cell2="A1"), N), ["A1", "C1"])
 
     def test_counting_with_row_region(self):
         self.assertEqual(clue_cells(mk("EXACTLY", region=ROW2, k=1), N), ["A2", "B2", "C2"])
@@ -39,7 +39,7 @@ class ClueCellsTest(unittest.TestCase):
         self.assertEqual(len(clue_cells(mk("EXACTLY", region=NEI_B2, k=1), N)), 8)
 
     def test_cells_region_is_sorted_and_deduplicated(self):
-        region = {"type": "cells", "cells": ["C3", "A1", "C3"]}
+        region = {"type": "list", "cells": ["C3", "A1", "C3"]}
         self.assertEqual(clue_cells(mk("EXACTLY", region=region, k=1), N), ["A1", "C3"])
 
     def test_parity_uses_region(self):
@@ -47,8 +47,8 @@ class ClueCellsTest(unittest.TestCase):
                          ["B1", "B2", "B3"])
 
     def test_compare_returns_union_of_both_regions_without_duplicates(self):
-        clue = mk("COMPARE", left={"type": "row", "index": 1},
-                  right={"type": "col", "index": "A"}, op="GT")
+        clue = mk("COMPARE", region1={"type": "row", "number": 1},
+                  region2={"type": "col", "letter": "A"}, op="GT")
         self.assertEqual(clue_cells(clue, N), ["A1", "B1", "C1", "A2", "A3"])
 
     def test_owner_is_not_included_unless_mentioned(self):
@@ -62,14 +62,14 @@ class ClueCellsTest(unittest.TestCase):
 class ValidateClueValidTest(unittest.TestCase):
     def test_all_core_and_extension_types_accepted(self):
         good = [
-            mk("FACT", cell="B2", status="INNOCENT"),
-            mk("SAME", a="A1", b="B2"),
-            mk("DIFFERENT", a="A1", b="C3"),
+            mk("FACT", target="B2", status="INNOCENT"),
+            mk("SAME_STATUS", cell1="A1", cell2="B2"),
+            mk("DIFFERENT_STATUS", cell1="A1", cell2="C3"),
             mk("EXACTLY", region=ROW2, k=2),
             mk("AT_LEAST", region=COLB, k=1),
             mk("AT_MOST", region=NEI_A1, k=2),
             mk("PARITY", region=ROW2, parity="EVEN"),
-            mk("COMPARE", left=ROW2, right=COLB, op="LE"),
+            mk("COMPARE", region1=ROW2, region2=COLB, op="LE"),
         ]
         for clue in good:
             with self.subTest(type=clue.type):
@@ -81,7 +81,26 @@ class ValidateClueValidTest(unittest.TestCase):
                 validate_clue(mk("EXACTLY", region=ROW2, k=k), N)
 
     def test_single_cell_region_accepted(self):
-        validate_clue(mk("EXACTLY", region={"type": "cells", "cells": ["B2"]}, k=1), N)
+        validate_clue(mk("EXACTLY", region={"type": "list", "cells": ["B2"]}, k=1), N)
+
+    def test_status_is_optional_and_defaults_to_criminal(self):
+        clue = mk("EXACTLY", region=ROW2, k=1)
+        validate_clue(clue, N)
+        self.assertEqual(clue_status(clue), "CRIMINAL")
+        validate_clue(mk("FACT", target="A1"), N)
+
+    def test_status_innocent_accepted_on_every_type_that_has_it(self):
+        for clue in (
+            mk("FACT", target="B2", status="INNOCENT"),
+            mk("EXACTLY", region=ROW2, k=1, status="INNOCENT"),
+            mk("AT_LEAST", region=ROW2, k=1, status="INNOCENT"),
+            mk("AT_MOST", region=ROW2, k=1, status="INNOCENT"),
+            mk("PARITY", region=ROW2, parity="ODD", status="INNOCENT"),
+            mk("COMPARE", region1=ROW2, region2=COLB, op="GT", status="INNOCENT"),
+        ):
+            with self.subTest(type=clue.type):
+                validate_clue(clue, N)
+                self.assertEqual(clue_status(clue), "INNOCENT")
 
     def test_clue_from_dict_roundtrip_validates(self):
         clue = clue_from_dict("A1", {"type": "EXACTLY", "region": NEI_A1, "k": 1})
@@ -102,19 +121,35 @@ class ValidateClueInvalidTest(unittest.TestCase):
     def test_cells_outside_grid_or_malformed(self):
         for bad in ("D1", "A4", "a1", "A01", "", "1A", None, 5):
             with self.subTest(cell=bad):
-                self.assert_invalid(mk("FACT", cell=bad, status="CRIMINAL"))
+                self.assert_invalid(mk("FACT", target=bad, status="CRIMINAL"))
 
     def test_fact_bad_status(self):
         for bad in ("criminal", "UNKNOWN", None):
             with self.subTest(status=bad):
-                self.assert_invalid(mk("FACT", cell="A1", status=bad))
+                self.assert_invalid(mk("FACT", target="A1", status=bad))
 
     def test_same_and_different_reject_outside_cell_and_identical_cells(self):
-        for t in ("SAME", "DIFFERENT"):
+        for t in ("SAME_STATUS", "DIFFERENT_STATUS"):
             with self.subTest(type=t, case="outside"):
-                self.assert_invalid(mk(t, a="A1", b="D4"))
+                self.assert_invalid(mk(t, cell1="A1", cell2="D4"))
             with self.subTest(type=t, case="identical"):
-                self.assert_invalid(mk(t, a="B2", b="B2"))
+                self.assert_invalid(mk(t, cell1="B2", cell2="B2"))
+
+    def test_bad_status_on_non_fact_types(self):
+        for clue in (
+            mk("EXACTLY", region=ROW2, k=1, status="innocent"),
+            mk("PARITY", region=ROW2, parity="ODD", status=None),
+            mk("COMPARE", region1=ROW2, region2=COLB, op="GT", status="UNKNOWN"),
+        ):
+            with self.subTest(type=clue.type):
+                self.assert_invalid(clue)
+
+    def test_old_key_names_are_rejected(self):
+        self.assert_invalid(mk("FACT", cell="A1", status="CRIMINAL"))
+        self.assert_invalid(mk("SAME", a="A1", b="B2"))
+        self.assert_invalid(mk("EXACTLY", region={"type": "row", "index": 2}, k=1))
+        self.assert_invalid(mk("EXACTLY", region={"type": "cells", "cells": ["A1"]}, k=1))
+        self.assert_invalid(mk("COMPARE", left=ROW2, right=COLB, op="GT"))
 
     def test_k_out_of_range(self):
         # vùng neighbors của A1 có 3 ô
@@ -132,19 +167,19 @@ class ValidateClueInvalidTest(unittest.TestCase):
         self.assert_invalid(mk("EXACTLY", k=1))
 
     def test_empty_cells_region(self):
-        self.assert_invalid(mk("EXACTLY", region={"type": "cells", "cells": []}, k=0))
+        self.assert_invalid(mk("EXACTLY", region={"type": "list", "cells": []}, k=0))
 
     def test_cells_region_with_duplicates(self):
-        region = {"type": "cells", "cells": ["A1", "B2", "A1"]}
+        region = {"type": "list", "cells": ["A1", "B2", "A1"]}
         self.assert_invalid(mk("EXACTLY", region=region, k=1))
 
     def test_cells_region_with_outside_cell(self):
-        region = {"type": "cells", "cells": ["A1", "D1"]}
+        region = {"type": "list", "cells": ["A1", "D1"]}
         self.assert_invalid(mk("EXACTLY", region=region, k=1))
 
     def test_row_and_col_outside_grid(self):
-        for region in ({"type": "row", "index": 0}, {"type": "row", "index": 4},
-                       {"type": "col", "index": "D"}, {"type": "col", "index": "AB"}):
+        for region in ({"type": "row", "number": 0}, {"type": "row", "number": 4},
+                       {"type": "col", "letter": "D"}, {"type": "col", "letter": "AB"}):
             with self.subTest(region=region):
                 self.assert_invalid(mk("EXACTLY", region=region, k=0))
 
@@ -163,9 +198,9 @@ class ValidateClueInvalidTest(unittest.TestCase):
         self.assert_invalid(mk("PARITY", region=ROW2))
 
     def test_compare_bad_op_or_region(self):
-        self.assert_invalid(mk("COMPARE", left=ROW2, right=COLB, op="NE"))
-        self.assert_invalid(mk("COMPARE", left=ROW2, right={"type": "row", "index": 9}, op="GT"))
-        self.assert_invalid(mk("COMPARE", left=ROW2, op="GT"))
+        self.assert_invalid(mk("COMPARE", region1=ROW2, region2=COLB, op="NE"))
+        self.assert_invalid(mk("COMPARE", region1=ROW2, region2={"type": "row", "number": 9}, op="GT"))
+        self.assert_invalid(mk("COMPARE", region1=ROW2, op="GT"))
 
 
 if __name__ == "__main__":
