@@ -13,7 +13,10 @@
   COMPARE           {"region1": <region>, "region2": <region>,
                      "op": "GT"|"GE"|"EQ"|"LE"|"LT", "status": ...}
 
-  status ∈ {"CRIMINAL", "INNOCENT"}; bỏ qua thì mặc định "CRIMINAL" (dùng clue_status()).
+  status ∈ {"CRIMINAL", "INNOCENT"}.
+    - FACT: BẮT BUỘC có status (không có mặc định).
+    - EXACTLY/AT_LEAST/AT_MOST/PARITY/COMPARE: bỏ qua thì mặc định "CRIMINAL" (dùng clue_status()).
+    - SAME_STATUS/DIFFERENT_STATUS: không dùng status.
 
   <region> = {"type": "row", "number": 2}
            | {"type": "col", "letter": "B"}
@@ -54,8 +57,22 @@ def clue_from_dict(owner: str, d: dict) -> Clue:
 
 
 def clue_status(clue: Clue) -> str:
-    """status của clue; bỏ qua thì mặc định CRIMINAL (encoder C và semantic D đều gọi hàm này)."""
-    return clue.params.get("status", DEFAULT_STATUS)
+    """status của clue (encoder C và semantic D đều gọi hàm này).
+
+    FACT: bắt buộc có status. SAME_STATUS/DIFFERENT_STATUS: không có status.
+    Các loại còn lại: bỏ qua thì mặc định CRIMINAL.
+
+    Raises:
+        ValueError: FACT thiếu status, hoặc clue SAME_STATUS/DIFFERENT_STATUS (không dùng status).
+    """
+    t, p = clue.type, clue.params
+    if t in PAIR_TYPES:
+        raise ValueError(f"{t} không dùng status")
+    if t == "FACT":
+        if "status" not in p:
+            raise ValueError("FACT: thiếu status (bắt buộc)")
+        return p["status"]
+    return p.get("status", DEFAULT_STATUS)
 
 
 def resolve_region(region: dict, n: int) -> List[str]:
@@ -155,12 +172,15 @@ def validate_clue(clue: Clue, n: int) -> None:
        - region đúng kiểu, không rỗng; 'cells' không có ô trùng
        - 0 <= k <= |region| với EXACTLY/AT_LEAST/AT_MOST (k là int, không phải bool)
        - SAME/DIFFERENT: hai ô khác nhau (clue về một ô với chính nó vô nghĩa)
-       - type, status (tùy chọn, mặc định CRIMINAL), parity, op hợp lệ; thiếu tham số cũng báo ValueError (không KeyError)
+       - type, parity, op hợp lệ; status hợp lệ: FACT bắt buộc có, các clue đếm/PARITY/COMPARE
+         tùy chọn (mặc định CRIMINAL), SAME_STATUS/DIFFERENT_STATUS không dùng; thiếu tham số cũng báo ValueError (không KeyError)
     """
     t, p = clue.type, clue.params
     _check_cell(clue.owner, n, "owner")
     if t == "FACT":
         _check_cell(p.get("target"), n, t)
+        if "status" not in p:
+            raise ValueError(f"{t}: thiếu status (bắt buộc với FACT)")
         _check_status(p, t)
     elif t in PAIR_TYPES:
         _check_cell(p.get("cell1"), n, t)

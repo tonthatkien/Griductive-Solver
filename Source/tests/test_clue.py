@@ -83,11 +83,28 @@ class ValidateClueValidTest(unittest.TestCase):
     def test_single_cell_region_accepted(self):
         validate_clue(mk("EXACTLY", region={"type": "list", "cells": ["B2"]}, k=1), N)
 
-    def test_status_is_optional_and_defaults_to_criminal(self):
-        clue = mk("EXACTLY", region=ROW2, k=1)
-        validate_clue(clue, N)
-        self.assertEqual(clue_status(clue), "CRIMINAL")
-        validate_clue(mk("FACT", target="A1"), N)
+    def test_status_is_optional_and_defaults_to_criminal_for_counting_types(self):
+        for clue in (
+            mk("EXACTLY", region=ROW2, k=1),
+            mk("AT_LEAST", region=ROW2, k=1),
+            mk("AT_MOST", region=ROW2, k=1),
+            mk("PARITY", region=ROW2, parity="EVEN"),
+            mk("COMPARE", region1=ROW2, region2=COLB, op="GT"),
+        ):
+            with self.subTest(type=clue.type):
+                validate_clue(clue, N)
+                self.assertEqual(clue_status(clue), "CRIMINAL")
+
+    def test_pair_types_ignore_status_and_clue_status_rejects_them(self):
+        for t in ("SAME_STATUS", "DIFFERENT_STATUS"):
+            with self.subTest(type=t):
+                clue = mk(t, cell1="A1", cell2="B2")
+                validate_clue(clue, N)
+                with self.assertRaises(ValueError):
+                    clue_status(clue)
+
+    def test_clue_status_fact_returns_given_status(self):
+        self.assertEqual(clue_status(mk("FACT", target="A1", status="INNOCENT")), "INNOCENT")
 
     def test_status_innocent_accepted_on_every_type_that_has_it(self):
         for clue in (
@@ -122,6 +139,11 @@ class ValidateClueInvalidTest(unittest.TestCase):
         for bad in ("D1", "A4", "a1", "A01", "", "1A", None, 5):
             with self.subTest(cell=bad):
                 self.assert_invalid(mk("FACT", target=bad, status="CRIMINAL"))
+
+    def test_fact_requires_status(self):
+        self.assert_invalid(mk("FACT", target="A1"))
+        with self.assertRaises(ValueError):
+            clue_status(mk("FACT", target="A1"))
 
     def test_fact_bad_status(self):
         for bad in ("criminal", "UNKNOWN", None):
