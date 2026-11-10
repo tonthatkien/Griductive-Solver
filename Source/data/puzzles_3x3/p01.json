@@ -1,0 +1,69 @@
+{
+  "n": 3,
+  "characters": [
+    {
+      "cell": "A1",
+      "name": "Abel",
+      "profession": "Astronaut",
+      "criminal": true,
+      "clue": { "type": "FACT", "target": "B2", "status": "CRIMINAL" }
+    },
+    {
+      "cell": "B1",
+      "name": "Bea",
+      "profession": "Cook",
+      "criminal": false,
+      "clue": { "type": "SAME_STATUS", "cell1": "A1", "cell2": "C2" }
+    },
+    {
+      "cell": "C1",
+      "name": "Clara",
+      "profession": "Guard",
+      "criminal": false,
+      "clue": { "type": "EXACTLY", "region": { "type": "col", "letter": "C" }, "k": 2, "status": "CRIMINAL" }
+    },
+    {
+      "cell": "A2",
+      "name": "Derek",
+      "profession": "Teacher",
+      "criminal": false,
+      "clue": { "type": "EXACTLY", "region": { "type": "row", "number": 3 }, "k": 1, "status": "CRIMINAL" }
+    },
+    {
+      "cell": "B2",
+      "name": "Eliza",
+      "profession": "Detective",
+      "criminal": true,
+      "clue": { "type": "AT_LEAST", "region": { "type": "row", "number": 3 }, "k": 1, "status": "CRIMINAL" }
+    },
+    {
+      "cell": "C2",
+      "name": "Franz",
+      "profession": "Artist",
+      "criminal": true,
+      "clue": { "type": "AT_LEAST", "region": { "type": "neighbors", "cell": "C2" }, "k": 3, "status": "INNOCENT" }
+    },
+    {
+      "cell": "A3",
+      "name": "Grant",
+      "profession": "Clerk",
+      "criminal": false,
+      "clue": { "type": "EXACTLY", "region": { "type": "col", "letter": "A" }, "k": 1, "status": "CRIMINAL" }
+    },
+    {
+      "cell": "B3",
+      "name": "Hannah",
+      "profession": "Farmer",
+      "criminal": false,
+      "clue": { "type": "AT_MOST", "region": { "type": "row", "number": 2 }, "k": 2, "status": "CRIMINAL" }
+    },
+    {
+      "cell": "C3",
+      "name": "Ivy",
+      "profession": "Doctor",
+      "criminal": true,
+      "clue": { "type": "FACT", "target": "A3", "status": "INNOCENT" }
+    }
+  ],
+  "initially_revealed": ["A1", "C1"]
+}
