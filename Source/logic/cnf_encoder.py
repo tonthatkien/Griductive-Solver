@@ -25,6 +25,9 @@ Report cần: suy ra công thức cho 1 clue nhị phân (SAME/DIFFERENT) và 1 
 from dataclasses import dataclass
 from typing import List
 
+from engine import board
+from engine.game_state import CRIMINAL, INNOCENT
+
 Clause = List[int]
 
 
@@ -38,18 +41,35 @@ class KB:
     def num_vars(self) -> int:
         return self.num_primary + self.num_aux
 
+    @property
+    def num_clauses(self) -> int:
+        return len(self.clauses)
+
 
 class Encoder:
     def __init__(self, n: int):
         self.n = n
-        self._next_aux = n * n + 1
+        self._next_aux = board.first_aux_var(n)
         self.num_aux = 0
+
+    @property
+    def num_primary(self) -> int:
+        return self.n * self.n
 
     def new_aux(self) -> int:
         v = self._next_aux
         self._next_aux += 1
         self.num_aux += 1
         return v
+
+    def literal_of(self, cell: str, status: str = CRIMINAL) -> int:
+        """Literal của ô: +var nếu status là CRIMINAL, -var nếu là INNOCENT."""
+        var = board.var_of(cell, self.n)
+        if status == CRIMINAL:
+            return var
+        if status == INNOCENT:
+            return -var
+        raise ValueError(f"Status is not valid: {status!r}")
 
     def encode_clue(self, clue) -> List[Clause]:
         raise NotImplementedError
