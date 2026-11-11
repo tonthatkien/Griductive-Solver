@@ -1,4 +1,4 @@
-"""DPLL SAT solver. (Scope D)
+"""Bộ giải SAT sử dụng thuật toán DPLL thuần Python (Scope D - Task D1).
 """
 import math
 import time
@@ -167,6 +167,114 @@ class DPLLSolver:
             assignment[var] = (first_unit_lit > 0)
             self.stats.propagations += 1
 
+    def _validate_options(
+        self, num_vars: int, timeout: Optional[float], start_time: float
+    ) -> Tuple[Optional[float], bool]:
+        """Kiểm tra tính hợp lệ của num_vars, timeout và tính mốc deadline."""
+        if not isinstance(num_vars, int) or isinstance(num_vars, bool):
+            raise TypeError(f"num_vars phải là số nguyên (int), nhận được: {num_vars!r}")
+        if num_vars < 0:
+            raise ValueError(f"num_vars không hợp lệ (phải >= 0): {num_vars}")
+
+        if timeout is not None:
+            if (not isinstance(timeout, (int, float))) or isinstance(timeout, bool):
+                raise TypeError(f"timeout phải là số thực hoặc int, nhận được: {timeout!r}")
+            if math.isnan(timeout):
+                raise ValueError(f"timeout không hợp lệ (NaN): {timeout!r}")
+            if timeout <= 0:
+                return None, True
+
+        deadline = (start_time + timeout) if timeout is not None else None
+        return deadline, False
+
+    def _normalize_clauses(
+        self, clauses: Sequence[Sequence[int]], num_vars: int, deadline: Optional[float]
+    ) -> List[Tuple[int, ...]]:
+        """Chuẩn hóa và xác thực tập mệnh đề CNF có kiểm tra deadline định kỳ."""
+        if isinstance(clauses, (str, bytes)) or not hasattr(clauses, "__iter__"):
+            raise TypeError(f"clauses phải là tập hợp các mệnh đề, nhận được: {clauses!r}")
+
+        clauses_list: List[Tuple[int, ...]] = []
+        for idx, clause in enumerate(clauses):
+            if deadline is not None and (idx & 63 == 0) and time.perf_counter() >= deadline:
+                raise _TimeoutException()
+            if isinstance(clause, (str, bytes)) or not hasattr(clause, "__iter__"):
+                raise TypeError(f"Mệnh đề phải là danh sách các literal, nhận được: {clause!r}")
+
+            c_lits: List[int] = []
+            for lit_idx, lit in enumerate(clause):
+                if (
+                    deadline is not None
+                    and (lit_idx & 63 == 0)
+                    and time.perf_counter() >= deadline
+                ):
+                    raise _TimeoutException()
+                if not isinstance(lit, int) or isinstance(lit, bool):
+                    raise TypeError(f"Literal phải là số nguyên (int), nhận được: {lit!r}")
+                if lit == 0:
+                    raise ValueError("Literal trong mệnh đề không được bằng 0")
+                if abs(lit) > num_vars:
+                    raise ValueError(
+                        f"Literal {lit} có biến {abs(lit)} vượt quá num_vars={num_vars}"
+                    )
+                c_lits.append(lit)
+            clauses_list.append(tuple(c_lits))
+
+        return clauses_list
+
+    def _normalize_assumptions(
+        self, assumptions: Sequence[int], num_vars: int, deadline: Optional[float]
+    ) -> List[int]:
+        """Chuẩn hóa và xác thực danh sách assumptions có kiểm tra deadline định kỳ."""
+        if isinstance(assumptions, (str, bytes)) or not hasattr(assumptions, "__iter__"):
+            raise TypeError(
+                f"assumptions phải là danh sách các literal, nhận được: {assumptions!r}"
+            )
+
+        assumptions_list: List[int] = []
+        for a_idx, lit in enumerate(assumptions):
+            if deadline is not None and (a_idx & 63 == 0) and time.perf_counter() >= deadline:
+                raise _TimeoutException()
+            if not isinstance(lit, int) or isinstance(lit, bool):
+                raise TypeError(f"Assumption literal phải là số nguyên (int), nhận được: {lit!r}")
+            if lit == 0:
+                raise ValueError("Literal trong assumptions không được bằng 0")
+            if abs(lit) > num_vars:
+                raise ValueError(
+                    f"Assumption {lit} có biến {abs(lit)} vượt quá num_vars={num_vars}"
+                )
+            assumptions_list.append(lit)
+
+        return assumptions_list
+
+    def _apply_assumptions(
+        self, assumptions: Sequence[int], assignment: Dict[int, bool], deadline: Optional[float]
+    ) -> bool:
+        """Áp dụng các giả định ban đầu; trả về False nếu xảy ra mâu thuẫn trực tiếp."""
+        for idx, lit in enumerate(assumptions):
+            if deadline is not None and (idx & 63 == 0) and time.perf_counter() >= deadline:
+                raise _TimeoutException()
+            var = abs(lit)
+            val = (lit > 0)
+            if var in assignment and assignment[var] != val:
+                return False
+            assignment[var] = val
+        return True
+
+    def _check_all_clauses_satisfied(
+        self,
+        clauses: Sequence[Sequence[int]],
+        assignment: Dict[int, bool],
+        deadline: Optional[float],
+    ) -> bool:
+        """Kiểm tra toàn bộ mệnh đề đã được thỏa mãn qua phép gán hiện tại hay chưa."""
+        for idx, c in enumerate(clauses):
+            if deadline is not None and (idx & 63 == 0) and time.perf_counter() >= deadline:
+                raise _TimeoutException()
+            if not self.is_clause_satisfied(c, assignment, deadline=deadline):
+                return False
+        return True
+
     def _build_full_model(
         self,
         assignment: Dict[int, bool],
@@ -174,9 +282,12 @@ class DPLLSolver:
         deadline: Optional[float] = None,
     ) -> Dict[int, bool]:
         """Xây dựng bảng gán hoàn chỉnh cho mọi biến từ 1 đến num_vars có kiểm tra deadline."""
+        if deadline is not None and time.perf_counter() >= deadline:
+            raise _TimeoutException()
+
         full_model: Dict[int, bool] = {}
         for v in range(1, num_vars + 1):
-            if deadline is not None and (v & 1023 == 0) and time.perf_counter() >= deadline:
+            if deadline is not None and (v & 63 == 0) and time.perf_counter() >= deadline:
                 raise _TimeoutException()
             full_model[v] = assignment.get(v, False)
         return full_model
@@ -191,103 +302,28 @@ class DPLLSolver:
         """Giải bài toán SAT bằng DPLL hỗ trợ assumptions và thống kê.
 
         Trong phạm vi Task D1:
-        - Thực hiện lan truyền mệnh đề đơn (Unit Propagation) và phát hiện mâu thuẫn (Conflict).
-        - Nếu công thức thỏa mãn hoàn toàn qua Unit Propagation -> trả về SAT cùng model hợp lệ.
-        - Nếu phát hiện mâu thuẫn -> trả về UNSAT (sat=False, model=None).
-        - Nếu chưa thể giải quyết chỉ bằng Unit Propagation -> ném NotImplementedError (thuộc D2).
+        - Lan truyền mệnh đề đơn (Unit Propagation) và phát hiện mâu thuẫn (Conflict).
+        - Nếu công thức thỏa mãn hoàn toàn qua Unit Propagation -> SAT kèm model.
+        - Nếu phát hiện mâu thuẫn -> UNSAT (sat=False, model=None, timed_out=False).
+        - Nếu hết thời gian -> TIMEOUT (sat=False, model=None, timed_out=True).
+        - Nếu chưa thể giải quyết chỉ bằng Unit Propagation -> ném NotImplementedError.
         """
         start_time = time.perf_counter()
         self.stats = SolverStats()
 
-        if not isinstance(num_vars, int) or isinstance(num_vars, bool):
-            raise TypeError(f"num_vars phải là số nguyên (int), nhận được: {num_vars!r}")
-        if num_vars < 0:
-            raise ValueError(f"num_vars không hợp lệ (phải >= 0): {num_vars}")
-
-        if timeout is not None:
-            if (not isinstance(timeout, (int, float))) or isinstance(timeout, bool):
-                raise TypeError(f"timeout phải là số thực hoặc int, nhận được: {timeout!r}")
-            if math.isnan(timeout):
-                raise ValueError(f"timeout không hợp lệ (NaN): {timeout!r}")
-            if timeout <= 0:
-                self.stats.runtime = time.perf_counter() - start_time
-                return SolveResult(sat=False, model=None, stats=self.stats, timed_out=True)
-
-        deadline = (start_time + timeout) if timeout is not None else None
-
-        if isinstance(clauses, (str, bytes)) or not hasattr(clauses, "__iter__"):
-            raise TypeError(f"clauses phải là tập hợp các mệnh đề, nhận được: {clauses!r}")
-
-        # Chuẩn hóa clauses thành list các tuple để hỗ trợ cả iterator/generator
-        # và bảo đảm kiểm tra deadline trong từng vòng lặp
-        clauses_list: List[Tuple[int, ...]] = []
-        assumptions_list: List[int] = []
-        assignment: Dict[int, bool] = {}
+        deadline, is_instant_timeout = self._validate_options(num_vars, timeout, start_time)
+        if is_instant_timeout:
+            self.stats.runtime = time.perf_counter() - start_time
+            return SolveResult(sat=False, model=None, stats=self.stats, timed_out=True)
 
         try:
-            for idx, clause in enumerate(clauses):
-                if deadline is not None and (idx & 63 == 0) and time.perf_counter() >= deadline:
-                    raise _TimeoutException()
+            clauses_list = self._normalize_clauses(clauses, num_vars, deadline)
+            assump_list = self._normalize_assumptions(assumptions, num_vars, deadline)
 
-                if isinstance(clause, (str, bytes)) or not hasattr(clause, "__iter__"):
-                    raise TypeError(
-                        f"Mệnh đề phải là danh sách các literal, nhận được: {clause!r}"
-                    )
-
-                c_lits: List[int] = []
-                for lit_idx, lit in enumerate(clause):
-                    if (
-                        deadline is not None
-                        and (lit_idx & 63 == 0)
-                        and time.perf_counter() >= deadline
-                    ):
-                        raise _TimeoutException()
-                    if not isinstance(lit, int) or isinstance(lit, bool):
-                        raise TypeError(f"Literal phải là số nguyên (int), nhận được: {lit!r}")
-                    if lit == 0:
-                        raise ValueError("Literal trong mệnh đề không được bằng 0")
-                    if abs(lit) > num_vars:
-                        raise ValueError(
-                            f"Literal {lit} có biến {abs(lit)} vượt quá num_vars={num_vars}"
-                        )
-                    c_lits.append(lit)
-                clauses_list.append(tuple(c_lits))
-
-            if isinstance(assumptions, (str, bytes)) or not hasattr(assumptions, "__iter__"):
-                raise TypeError(
-                    f"assumptions phải là danh sách các literal, nhận được: {assumptions!r}"
-                )
-
-            # Chuẩn hóa assumptions thành list có kiểm tra deadline
-            for a_idx, lit in enumerate(assumptions):
-                if (
-                    deadline is not None
-                    and (a_idx & 63 == 0)
-                    and time.perf_counter() >= deadline
-                ):
-                    raise _TimeoutException()
-                if not isinstance(lit, int) or isinstance(lit, bool):
-                    raise TypeError(
-                        f"Assumption literal phải là số nguyên (int), nhận được: {lit!r}"
-                    )
-                if lit == 0:
-                    raise ValueError("Literal trong assumptions không được bằng 0")
-                if abs(lit) > num_vars:
-                    raise ValueError(
-                        f"Assumption {lit} có biến {abs(lit)} vượt quá num_vars={num_vars}"
-                    )
-                assumptions_list.append(lit)
-
-            # Xử lý các giả định ban đầu như unit clause tạm thời
-            for idx, lit in enumerate(assumptions_list):
-                if deadline is not None and (idx & 63 == 0) and time.perf_counter() >= deadline:
-                    raise _TimeoutException()
-                var = abs(lit)
-                val = (lit > 0)
-                if var in assignment and assignment[var] != val:
-                    self.stats.runtime = time.perf_counter() - start_time
-                    return SolveResult(sat=False, model=None, stats=self.stats)
-                assignment[var] = val
+            assignment: Dict[int, bool] = {}
+            if not self._apply_assumptions(assump_list, assignment, deadline):
+                self.stats.runtime = time.perf_counter() - start_time
+                return SolveResult(sat=False, model=None, stats=self.stats)
 
             # 1. Lan truyền mệnh đề đơn (Unit Propagation - Scope D1)
             is_conf, _ = self.unit_propagate(clauses_list, assignment, deadline=deadline)
@@ -296,18 +332,10 @@ class DPLLSolver:
                 return SolveResult(sat=False, model=None, stats=self.stats)
 
             # 2. Kiểm tra nếu toàn bộ mệnh đề đã được thỏa mãn qua Unit Propagation
-            all_sat = True
-            for idx, c in enumerate(clauses_list):
-                if deadline is not None and (idx & 63 == 0) and time.perf_counter() >= deadline:
-                    raise _TimeoutException()
-                if not self.is_clause_satisfied(c, assignment, deadline=deadline):
-                    all_sat = False
-                    break
-
-            if all_sat:
-                full_model = self._build_full_model(assignment, num_vars, deadline=deadline)
+            if self._check_all_clauses_satisfied(clauses_list, assignment, deadline):
+                model = self._build_full_model(assignment, num_vars, deadline=deadline)
                 self.stats.runtime = time.perf_counter() - start_time
-                return SolveResult(sat=True, model=full_model, stats=self.stats)
+                return SolveResult(sat=True, model=model, stats=self.stats)
 
             # 3. Chưa thể kết luận bằng Unit Propagation: cần branching & backtracking (D2)
             self.stats.runtime = time.perf_counter() - start_time

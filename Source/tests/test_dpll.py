@@ -1,4 +1,13 @@
-"""Kiểm thử DPLL: Lan truyền đơn vị và phát hiện xung đột.
+"""Kiểm thử DPLL: Lan truyền đơn vị và phát hiện xung đột (Task D1).
+
+Bộ kiểm thử được thiết kế tinh giản, tập trung vào:
+1. Các yêu cầu cốt lõi của Task D1 (Unit Propagation & Conflict Detection).
+2. Xử lý mệnh đề hằng đúng (Tautology: [x, -x] -> SATISFIED).
+3. Kiểm chứng tính đúng đắn của SAT model (Model 1..num_vars thỏa mãn toàn bộ clauses).
+4. Tính bất biến của tập clauses khi gọi unit_propagate và solve() kèm assumptions.
+5. Khả năng tái sử dụng an toàn instance solver (reset stats & cô lập state giữa các lần gọi).
+6. Ranh giới chuẩn Task D1 -> D2 (ném NotImplementedError khi cần branching).
+7. Phòng thủ an toàn dữ liệu đầu vào (validate types/bounds, generator, timeout).
 """
 import time
 import unittest
@@ -8,7 +17,7 @@ from logic.dpll import DPLLSolver, _TimeoutException
 
 
 class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
-    """Kiểm thử thuật toán lan truyền đơn vị và phát hiện xung đột."""
+    """Kiểm thử thuật toán lan truyền đơn vị và phát hiện xung đột (Task D1)."""
 
     def setUp(self) -> None:
         self.solver = DPLLSolver()
@@ -116,6 +125,11 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
 
     def test_tautology_clause(self) -> None:
         """Mệnh đề chứa cả x và ¬x là hằng đúng (Tautology), luôn SAT và không gây conflict.
+
+        Đáp ứng nhận xét:
+        - get_clause_status([1, -1], {}) phải trả về ("SATISFIED", None).
+        - solve([[1, -1]], num_vars=1) phải trả về SAT với model hợp lệ mà không cần branching.
+        - Tautology kết hợp unit clause: [[1, -1, 2], [-2]] luôn được giải chính xác.
         """
         # 1. Trạng thái của [1, -1] dưới phép gán rỗng phải là SATISFIED
         self.assertEqual(self.solver.get_clause_status([1, -1], {}), ("SATISFIED", None))
@@ -145,6 +159,12 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
 
     def test_sat_model_validates_all_clauses(self) -> None:
         """Kiểm chứng tính đúng đắn thực sự của SAT model sau khi lan truyền đơn vị.
+
+        Đáp ứng nhận xét:
+        - Sử dụng đúng công thức: clauses = [[1], [-1, 2], [-2, 3]] với num_vars = 5.
+        - Model chứa đầy đủ các biến từ 1..num_vars.
+        - Mỗi mệnh đề đều có ít nhất một literal nhận giá trị True dưới model trả về.
+        - Các biến chưa được gán sau propagation (4, 5) được hoàn thiện an toàn.
         """
         clauses = [[1], [-1, 2], [-2, 3]]
         num_vars = 5
@@ -289,31 +309,31 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
         with self.assertRaises(TypeError):
             self.solver.solve([], num_vars=1.5)
         with self.assertRaises(TypeError):
-            self.solver.solve([], num_vars=True)  
+            self.solver.solve([], num_vars=True)
         with self.assertRaises(TypeError):
-            self.solver.solve([[1.5]], num_vars=2)  
+            self.solver.solve([[1.5]], num_vars=2)
         with self.assertRaises(TypeError):
-            self.solver.solve([[1, True]], num_vars=2)  
+            self.solver.solve([[1, True]], num_vars=2)
         with self.assertRaises(TypeError):
-            self.solver.solve([[1]], num_vars=2, assumptions=[False])  
+            self.solver.solve([[1]], num_vars=2, assumptions=[False])
 
         # 4. Timeout không hợp lệ (NaN, chuỗi, bool)
         with self.assertRaises(ValueError):
             self.solver.solve([[1]], num_vars=1, timeout=float("nan"))
         with self.assertRaises(TypeError):
-            self.solver.solve([[1]], num_vars=1, timeout="1.0") 
+            self.solver.solve([[1]], num_vars=1, timeout="1.0")
         with self.assertRaises(TypeError):
-            self.solver.solve([[1]], num_vars=1, timeout=True)  
+            self.solver.solve([[1]], num_vars=1, timeout=True)
 
     def test_iterator_and_generator_safety(self) -> None:
         """Hỗ trợ an toàn các cấu trúc iterator/generator và không nuốt lỗi RecursionError."""
         # 1. Iterator clauses mâu thuẫn không bị cạn kiệt trong lúc validate -> trả về UNSAT
-        res_iter = self.solver.solve(iter([[1], [-1]]), num_vars=1)  
+        res_iter = self.solver.solve(iter([[1], [-1]]), num_vars=1)
         self.assertFalse(res_iter.sat)
 
         # 2. Generator clauses hợp lệ giải quyết bằng unit propagation -> SAT
         gen_c = (c for c in [[1], [-1, 2]])
-        res_gen = self.solver.solve(gen_c, num_vars=2)  
+        res_gen = self.solver.solve(gen_c, num_vars=2)
         self.assertTrue(res_gen.sat)
         assert res_gen.model is not None
         self.assertTrue(res_gen.model[1] and res_gen.model[2])
@@ -331,18 +351,36 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
             self.solver.solve(_recursive_gen(), num_vars=1)
 
     def test_timeout_handling(self) -> None:
-        """Kiểm soát timeout chính xác: ngắt ngay lập tức hoặc ngắt giữa chừng khi xử lý lớn."""
-        # 1. Timeout = 0.0 lập tức dừng mà không treo
+        """Kiểm soát timeout chính xác, phân biệt với UNSAT và cập nhật runtime/stats.
+
+        Xác minh:
+        - TIMEOUT luôn trả timed_out=True, sat=False, model=None.
+        - UNSAT thực sự trả timed_out=False, sat=False, model=None.
+        - Runtime được ghi nhận đầy đủ khi bị timeout.
+        - Gọi lại solve() sau khi timeout reset sạch sẽ stats và trả kết quả chính xác.
+        - _build_full_model ngắt kịp thời ngay cả khi deadline đã qua trước khi dựng model.
+        """
+        # 1. Timeout = 0.0 lập tức dừng: kiểm tra timed_out=True, runtime >= 0
         res_zero = self.solver.solve([[1]], num_vars=1, timeout=0.0)
         self.assertTrue(res_zero.timed_out)
         self.assertFalse(res_zero.sat)
+        self.assertIsNone(res_zero.model)
+        self.assertGreaterEqual(res_zero.stats.runtime, 0.0)
 
-        # 2. Timeout ngắt giữa chuỗi lan truyền lớn
+        # 2. Phân biệt rõ ràng giữa TIMEOUT và UNSAT thực sự
+        res_unsat = self.solver.solve([[1], [-1]], num_vars=1)
+        self.assertFalse(res_unsat.sat)
+        self.assertFalse(res_unsat.timed_out)
+        self.assertIsNone(res_unsat.model)
+
+        # 3. Timeout ngắt giữa chuỗi lan truyền lớn
         large_clauses = [[1]] + [[-i, i + 1] for i in range(1, 10000)]
         res_prop = self.solver.solve(large_clauses, num_vars=10001, timeout=1e-6)
         self.assertTrue(res_prop.timed_out)
+        self.assertFalse(res_prop.sat)
+        self.assertIsNone(res_prop.model)
 
-        # 3. Timeout ngắt an toàn trước generator assumptions vô hạn
+        # 4. Timeout ngắt an toàn trước generator assumptions vô hạn
         def _infinite_assumptions():
             while True:
                 yield 1
@@ -351,11 +389,18 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
             [[1]], num_vars=1, assumptions=_infinite_assumptions(), timeout=0.005
         )
         self.assertTrue(res_inf.timed_out)
+        self.assertFalse(res_inf.sat)
 
-        # 4. _build_full_model ném _TimeoutException khi dựng model cho số lượng biến cực lớn
-        deadline = time.perf_counter() + 0.002
+        # 5. Gọi lại solver instance sau timeout: stats được reset chính xác
+        res_reuse = self.solver.solve([[2]], num_vars=2)
+        self.assertTrue(res_reuse.sat)
+        self.assertFalse(res_reuse.timed_out)
+        self.assertEqual(res_reuse.stats.propagations, 1)
+
+        # 6. _build_full_model kiểm tra deadline nhất quán (kể cả số biến nhỏ)
+        deadline_past = time.perf_counter() - 0.001
         with self.assertRaises(_TimeoutException):
-            self.solver._build_full_model({}, num_vars=2_000_000, deadline=deadline)
+            self.solver._build_full_model({}, num_vars=5, deadline=deadline_past)
 
 
 if __name__ == "__main__":
