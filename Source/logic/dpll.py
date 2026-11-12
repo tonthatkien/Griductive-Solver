@@ -292,6 +292,115 @@ class DPLLSolver:
             full_model[v] = assignment.get(v, False)
         return full_model
 
+    def choose_variable(
+        self,
+        clauses: Sequence[Sequence[int]],
+        assignment: Dict[int, bool],
+        deadline: Optional[float] = None,
+    ) -> Optional[int]:
+        """Chọn biến phân nhánh theo quy tắc xác định (deterministic).
+
+        Tìm mệnh đề chưa được thỏa mãn có số biến chưa gán phân biệt ít nhất (độ dài
+        thực tế của mệnh đề sau khi loại trừ literal trùng lặp), và chọn biến có chỉ
+        số nhỏ nhất trong mệnh đề đó.
+        Nếu nhiều mệnh đề cùng độ dài nhỏ nhất, chọn biến nhỏ nhất trong số các mệnh đề đó.
+        Trả về None nếu tất cả mệnh đề đã thỏa mãn hoặc không còn biến chưa gán.
+        """
+        min_len = float("inf")
+        best_var: Optional[int] = None
+
+        for idx, clause in enumerate(clauses):
+            if deadline is not None and (idx & 63 == 0) and time.perf_counter() >= deadline:
+                raise _TimeoutException()
+
+            status, _ = self.get_clause_status(clause, assignment, deadline=deadline)
+            if status == "SATISFIED":
+                continue
+
+            unassigned_vars = set()
+            clause_min_var: Optional[int] = None
+            for lit_idx, lit in enumerate(clause):
+                if (
+                    deadline is not None
+                    and (lit_idx & 63 == 0)
+                    and time.perf_counter() >= deadline
+                ):
+                    raise _TimeoutException()
+                var = abs(lit)
+                if var not in assignment:
+                    unassigned_vars.add(var)
+                    if clause_min_var is None or var < clause_min_var:
+                        clause_min_var = var
+
+            if not unassigned_vars or clause_min_var is None:
+                continue
+
+            clause_len = len(unassigned_vars)
+            if clause_len < min_len:
+                min_len = clause_len
+                best_var = clause_min_var
+            elif clause_len == min_len:
+                if best_var is None or clause_min_var < best_var:
+                    best_var = clause_min_var
+
+        return best_var
+
+    def _dpll(
+        self,
+        clauses: Sequence[Sequence[int]],
+        assignment: Dict[int, bool],
+        num_vars: int,
+        deadline: Optional[float] = None,
+    ) -> Tuple[bool, Optional[Dict[int, bool]]]:
+        """Thuật toán DPLL đệ quy với Unit Propagation, Branching và Backtracking.
+
+        Các bước thực hiện:
+        1. Kiểm tra deadline nếu có.
+        2. Lan truyền mệnh đề đơn (Unit Propagation); nếu mâu thuẫn thì dừng nhánh (quay lui).
+        3. Kiểm tra xem toàn bộ mệnh đề đã được thỏa mãn hay chưa.
+        4. Chọn biến phân nhánh theo quy tắc xác định (mệnh đề ngắn nhất, biến nhỏ nhất).
+        5. Đệ quy thử nhánh True; nếu mâu thuẫn thì quay lui thử nhánh False.
+        """
+        if deadline is not None and time.perf_counter() >= deadline:
+            raise _TimeoutException()
+
+        # 1. Lan truyền mệnh đề đơn
+        is_conf, _ = self.unit_propagate(clauses, assignment, deadline=deadline)
+        if is_conf:
+            return False, None
+
+        # 2. Kiểm tra nếu toàn bộ mệnh đề đã thỏa mãn
+        if self._check_all_clauses_satisfied(clauses, assignment, deadline):
+            full_model = self._build_full_model(assignment, num_vars, deadline=deadline)
+            return True, full_model
+
+        # 3. Chọn biến phân nhánh theo quy tắc xác định
+        var = self.choose_variable(clauses, assignment, deadline=deadline)
+        if var is None:
+            full_model = self._build_full_model(assignment, num_vars, deadline=deadline)
+            return True, full_model
+
+        self.stats.decisions += 1
+
+        # 4. Phân nhánh: Thử True trước, quay lui thử False
+        # Nhánh 1: var = True
+        true_assignment = dict(assignment)
+        true_assignment[var] = True
+        sat, model = self._dpll(clauses, true_assignment, num_vars, deadline=deadline)
+        if sat:
+            return True, model
+        self.stats.backtracks += 1
+
+        # Nhánh 2: var = False
+        false_assignment = dict(assignment)
+        false_assignment[var] = False
+        sat, model = self._dpll(clauses, false_assignment, num_vars, deadline=deadline)
+        if sat:
+            return True, model
+        self.stats.backtracks += 1
+
+        return False, None
+
     def solve(
         self,
         clauses: Sequence[Sequence[int]],
@@ -299,8 +408,7 @@ class DPLLSolver:
         assumptions: Sequence[int] = (),
         timeout: Optional[float] = None,
     ) -> SolveResult:
-        """Giải bài toán SAT bằng DPLL hỗ trợ assumptions và thống kê.
-        """
+        """Giải bài toán SAT bằng DPLL hỗ trợ assumptions và thống kê."""
         start_time = time.perf_counter()
         self.stats = SolverStats()
 
@@ -318,24 +426,9 @@ class DPLLSolver:
                 self.stats.runtime = time.perf_counter() - start_time
                 return SolveResult(sat=False, model=None, stats=self.stats)
 
-            # 1. Lan truyền mệnh đề đơn 
-            is_conf, _ = self.unit_propagate(clauses_list, assignment, deadline=deadline)
-            if is_conf:
-                self.stats.runtime = time.perf_counter() - start_time
-                return SolveResult(sat=False, model=None, stats=self.stats)
-
-            # 2. Kiểm tra nếu toàn bộ mệnh đề đã được thỏa mãn qua Unit Propagation
-            if self._check_all_clauses_satisfied(clauses_list, assignment, deadline):
-                model = self._build_full_model(assignment, num_vars, deadline=deadline)
-                self.stats.runtime = time.perf_counter() - start_time
-                return SolveResult(sat=True, model=model, stats=self.stats)
-
-            # 3. Chưa thể kết luận bằng Unit Propagation: cần branching & backtracking
+            sat, model = self._dpll(clauses_list, assignment, num_vars, deadline=deadline)
             self.stats.runtime = time.perf_counter() - start_time
-            raise NotImplementedError(
-                "Công thức chưa thể kết luận chỉ bằng Unit Propagation. "
-                "Cần branching và backtracking."
-            )
+            return SolveResult(sat=sat, model=model, stats=self.stats)
         except _TimeoutException:
             self.stats.runtime = time.perf_counter() - start_time
             return SolveResult(sat=False, model=None, stats=self.stats, timed_out=True)

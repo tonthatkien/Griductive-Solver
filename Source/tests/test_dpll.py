@@ -163,11 +163,6 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
         self.assertFalse(res_innocent.sat)
         self.assertIsNone(res_innocent.model)
 
-    def test_formula_requiring_branching_raises_not_implemented(self) -> None:
-        """Công thức cần rẽ nhánh ném NotImplementedError."""
-        with self.assertRaises(NotImplementedError):
-            self.solver.solve([[1, 2]], num_vars=2)
-
     def test_input_validation(self) -> None:
         """Xác thực toàn diện đầu vào: từ chối kiểu sai, giá trị ngoài phạm vi, literal 0, NaN."""
         # 1. Literal 0 và vượt phạm vi bounds
@@ -253,6 +248,129 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
         deadline_past = time.perf_counter() - 0.001
         with self.assertRaises(_TimeoutException):
             self.solver._build_full_model({}, num_vars=5, deadline=deadline_past)
+
+
+class TestDPLLBranchingAndBacktracking(unittest.TestCase):
+    """Kiểm thử thuật toán DPLL: chọn biến deterministic, branching và backtracking (Task D2)."""
+
+    def setUp(self) -> None:
+        self.solver = DPLLSolver()
+
+    def test_choose_variable_heuristic(self) -> None:
+        """Kiểm tra toàn diện heuristic chọn biến phân nhánh trong choose_variable:
+        mệnh đề ngắn nhất, phân xử hòa, bỏ qua clause đã thỏa, literal trùng lặp và deadline.
+        """
+        # 1. Chọn biến nhỏ nhất trong mệnh đề chưa thỏa mãn ngắn nhất
+        clauses = [[3, 4, 5], [2, 6]]
+        self.assertEqual(self.solver.choose_variable(clauses, {}), 2)
+
+        # 2. Phân xử hòa: nhiều mệnh đề cùng độ dài nhỏ nhất -> chọn biến nhỏ nhất giữa chúng
+        # Bất biến theo thứ tự mệnh đề (tính tất định - deterministic)
+        self.assertEqual(self.solver.choose_variable([[3, 4], [2, 5]], {}), 2)
+        self.assertEqual(self.solver.choose_variable([[2, 5], [3, 4]], {}), 2)
+
+        # 3. Bỏ qua các mệnh đề đã thỏa mãn; trả về None khi toàn bộ đã thỏa
+        self.assertEqual(self.solver.choose_variable([[1, 2], [3, 4, 5]], {1: True}), 3)
+        self.assertIsNone(self.solver.choose_variable([[1, 2], [-1, 3]], {1: True, 3: True}))
+
+        # 4. Độ dài mệnh đề tính theo số biến chưa gán phân biệt (loại trừ literal trùng lặp)
+        # [3, 3, 3, 3] có 1 biến chưa gán {3} nên ngắn hơn [4, 5] có 2 biến {4, 5} -> chọn 3
+        self.assertEqual(self.solver.choose_variable([[4, 5], [3, 3, 3, 3]], {}), 3)
+
+        # 5. Kiểm tra deadline định kỳ khi quét literal của mệnh đề dài trong choose_variable
+        long_clause = [list(range(1, 101))]
+        calls = 0
+
+        def mock_time() -> float:
+            nonlocal calls
+            calls += 1
+            return 101.0 if calls >= 4 else 100.0
+
+        with patch("time.perf_counter", side_effect=mock_time):
+            with self.assertRaises(_TimeoutException):
+                self.solver.choose_variable(long_clause, {}, deadline=100.5)
+        self.assertEqual(calls, 4)
+
+    def test_branching_and_backtracking_mechanics(self) -> None:
+        """Kiểm tra cơ chế rẽ nhánh nhị phân (True/False), quay lui khi conflict và cô lập state."""
+        # 1. Nhánh True đầu tiên thỏa mãn công thức ngay thì không cần quay lui
+        res_first = self.solver.solve([[1, 2]], num_vars=2)
+        self.assertTrue(res_first.sat and res_first.model and res_first.model[1] is True)
+        self.assertEqual(res_first.stats.decisions, 1)
+        self.assertEqual(res_first.stats.backtracks, 0)
+
+        # 2. Nhánh True mâu thuẫn -> quay lui thử nhánh False thành công (1 backtrack)
+        # (x1 ∨ x2) ∧ (¬x1 ∨ x3) ∧ (¬x1 ∨ ¬x3): x1=True gây conflict, quay lui sang x1=False
+        clauses_conflict = [[1, 2], [-1, 3], [-1, -3]]
+        res_bt = self.solver.solve(clauses_conflict, num_vars=3)
+        self.assertTrue(res_bt.sat)
+        self.assertIsNotNone(res_bt.model)
+        assert res_bt.model is not None
+        self.assertFalse(res_bt.model[1])
+        self.assertTrue(res_bt.model[2])
+        self.assertEqual(res_bt.stats.decisions, 1)
+        self.assertEqual(res_bt.stats.backtracks, 1)
+
+        # 3. Phép gán từ nhánh thất bại không bị rò rỉ sang nhánh tiếp theo (x3 tự do nhận False)
+        self.assertFalse(res_bt.model[3])
+
+        # 4. Công thức UNSAT: cả hai nhánh đều mâu thuẫn và quay lui về gốc
+        clauses_unsat = [[1, 2], [1, -2], [-1, 2], [-1, -2]]
+        res_unsat = self.solver.solve(clauses_unsat, num_vars=2)
+        self.assertFalse(res_unsat.sat)
+        self.assertIsNone(res_unsat.model)
+        self.assertEqual(res_unsat.stats.decisions, 1)
+        self.assertEqual(res_unsat.stats.backtracks, 2)
+
+    def test_multilevel_search_and_deduction(self) -> None:
+        """Kiểm tra đệ quy rẽ nhánh nhiều tầng và ví dụ suy diễn entailment từ đề bài."""
+        # 1. Rẽ nhánh nhiều tầng (multi-level branching)
+        # (x1 ∨ x2 ∨ x3) ∧ (¬x1 ∨ x2) ∧ (¬x2 ∨ ¬x3) ∧ (¬x1 ∨ ¬x2)
+        clauses = [[1, 2, 3], [-1, 2], [-2, -3], [-1, -2]]
+        res_multi = self.solver.solve(clauses, num_vars=3)
+        self.assertTrue(res_multi.sat and res_multi.model)
+        assert res_multi.model is not None
+        for c in clauses:
+            self.assertTrue(self.solver.is_clause_satisfied(c, res_multi.model))
+        self.assertGreaterEqual(res_multi.stats.decisions, 2)
+        self.assertGreaterEqual(res_multi.stats.backtracks, 1)
+
+        # 2. Ví dụ trong đề bài: KB = (A ∨ B) ∧ (¬A ∨ B) với A = 1, B = 2
+        spec_kb = [[1, 2], [-1, 2]]
+        # KB ∧ ¬B là UNSAT -> chứng minh B là Criminal (True)
+        self.assertFalse(self.solver.solve(spec_kb, num_vars=2, assumptions=[-2]).sat)
+        # KB ∧ B là SAT
+        res_b = self.solver.solve(spec_kb, num_vars=2, assumptions=[2])
+        self.assertTrue(res_b.sat and res_b.model and res_b.model[2] is True)
+        # KB ∧ A và KB ∧ ¬A đều SAT -> A là UNKNOWN
+        self.assertTrue(self.solver.solve(spec_kb, num_vars=2, assumptions=[1]).sat)
+        self.assertTrue(self.solver.solve(spec_kb, num_vars=2, assumptions=[-1]).sat)
+
+    def test_model_and_solver_properties(self) -> None:
+        """Kiểm chứng tính đầy đủ của model, tính tất định và xử lý timeout khi rẽ nhánh."""
+        # 1. Mọi biến 1..num_vars đều có mặt trong model (kể cả biến tự do 3, 4)
+        res_model = self.solver.solve([[1, 2]], num_vars=4)
+        self.assertTrue(res_model.sat and res_model.model)
+        assert res_model.model is not None
+        self.assertEqual(set(res_model.model.keys()), {1, 2, 3, 4})
+
+        # 2. Tính tất định (deterministic): 2 lần giải liên tiếp cho ra model và stats trùng khớp 100%
+        clauses = [[1, 2, 3], [-1, 2], [-2, -3], [-1, -2]]
+        run1 = self.solver.solve(clauses, num_vars=3)
+        run2 = self.solver.solve(clauses, num_vars=3)
+        self.assertEqual(run1.sat, run2.sat)
+        self.assertEqual(run1.model, run2.model)
+        self.assertEqual(run1.stats.decisions, run2.stats.decisions)
+        self.assertEqual(run1.stats.propagations, run2.stats.propagations)
+        self.assertEqual(run1.stats.backtracks, run2.stats.backtracks)
+
+        # 3. Timeout = 0.0 lập tức trả về kết quả timeout mà không treo
+        res_timeout = self.solver.solve(
+            [[1, 2], [-1, 2], [1, -2], [-1, -2]], num_vars=2, timeout=0.0
+        )
+        self.assertTrue(res_timeout.timed_out)
+        self.assertFalse(res_timeout.sat)
+        self.assertIsNone(res_timeout.model)
 
 
 if __name__ == "__main__":
