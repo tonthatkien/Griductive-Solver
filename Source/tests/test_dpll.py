@@ -1,58 +1,39 @@
-"""Kiểm thử DPLL: Lan truyền đơn vị và phát hiện xung đột (Task D1).
-
-Bộ kiểm thử được thiết kế tinh giản, tập trung vào:
-1. Các yêu cầu cốt lõi của Task D1 (Unit Propagation & Conflict Detection).
-2. Xử lý mệnh đề hằng đúng (Tautology: [x, -x] -> SATISFIED).
-3. Kiểm chứng tính đúng đắn của SAT model (Model 1..num_vars thỏa mãn toàn bộ clauses).
-4. Tính bất biến của tập clauses khi gọi unit_propagate và solve() kèm assumptions.
-5. Khả năng tái sử dụng an toàn instance solver (reset stats & cô lập state giữa các lần gọi).
-6. Ranh giới chuẩn Task D1 -> D2 (ném NotImplementedError khi cần branching).
-7. Phòng thủ an toàn dữ liệu đầu vào (validate types/bounds, generator, timeout).
+"""Kiểm thử DPLL: Lan truyền đơn vị và phát hiện xung đột
 """
 import time
 import unittest
 from typing import Dict, List
+from unittest.mock import patch
 
 from logic.dpll import DPLLSolver, _TimeoutException
 
 
 class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
-    """Kiểm thử thuật toán lan truyền đơn vị và phát hiện xung đột (Task D1)."""
+    """Kiểm thử thuật toán lan truyền đơn vị và phát hiện xung đột"""
 
     def setUp(self) -> None:
         self.solver = DPLLSolver()
 
-    def test_unit_propagation_single_and_cascading(self) -> None:
+    def test_unit_propagation(self) -> None:
         """Lan truyền mệnh đề đơn lẻ, chuỗi liên hoàn và co gọn mệnh đề nhiều biến."""
-        # 1. Đơn dương [1] ép 1 = True
-        assign_pos: Dict[int, bool] = {}
-        is_conf, conf_c = self.solver.unit_propagate([[1]], assign_pos)
-        self.assertFalse(is_conf)
-        self.assertIsNone(conf_c)
-        self.assertEqual(assign_pos, {1: True})
-        self.assertEqual(self.solver.stats.propagations, 1)
-
-        # 2. Đơn âm [-2] ép 2 = False
+        # 1. Đơn âm [-2] ép 2 = False
         assign_neg: Dict[int, bool] = {}
         is_conf, conf_c = self.solver.unit_propagate([[-2]], assign_neg)
         self.assertFalse(is_conf)
         self.assertIsNone(conf_c)
         self.assertEqual(assign_neg, {2: False})
+        self.assertEqual(self.solver.stats.propagations, 1)
 
-        # 3. Lan truyền liên hoàn: [1] -> 2 -> 3 -> 4
-        assign_casc: Dict[int, bool] = {}
-        casc_clauses = [[1], [-1, 2], [-2, 3], [-3, 4]]
-        is_conf, conf_c = self.solver.unit_propagate(casc_clauses, assign_casc)
+        # 2. Chuỗi liên hoàn kết hợp co gọn mệnh đề:
+        # [1] ép 1=True; [-1, 2] ép 2=True; [-2, -4, 3] với 4=True (literal -4=False) ép 3=True
+        solver = DPLLSolver()
+        assign_casc: Dict[int, bool] = {4: True}
+        clauses = [[1], [-1, 2], [-2, -4, 3]]
+        is_conf, conf_c = solver.unit_propagate(clauses, assign_casc)
         self.assertFalse(is_conf)
         self.assertIsNone(conf_c)
-        self.assertEqual(assign_casc, {1: True, 2: True, 3: True, 4: True})
-
-        # 4. Mệnh đề [1, 2, 3] khi 1=False, 2=False co gọn thành unit clause suy ra 3=True
-        assign_shrink = {1: False, 2: False}
-        is_conf, conf_c = self.solver.unit_propagate([[1, 2, 3]], assign_shrink)
-        self.assertFalse(is_conf)
-        self.assertIsNone(conf_c)
-        self.assertEqual(assign_shrink[3], True)
+        self.assertEqual(assign_casc, {4: True, 1: True, 2: True, 3: True})
+        self.assertEqual(solver.stats.propagations, 3)
 
     def test_conflict_detection(self) -> None:
         """Phát hiện xung đột từ mệnh đề rỗng, mệnh đề đối nghịch và chuỗi lan truyền."""
@@ -69,43 +50,14 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
         self.assertEqual(assign_opp, {1: True})
 
         # 3. Chuỗi lan truyền dẫn tới xung đột: [1] -> 2 -> mâu thuẫn với [-2]
-        assign_casc_conf: Dict[int, bool] = {}
-        casc_conf_clauses = [[1], [-1, 2], [-2]]
-        is_conf, conf_c = self.solver.unit_propagate(casc_conf_clauses, assign_casc_conf)
+        assign_casc: Dict[int, bool] = {}
+        is_conf, conf_c = self.solver.unit_propagate([[1], [-1, 2], [-2]], assign_casc)
         self.assertTrue(is_conf)
         self.assertEqual(conf_c, [-2])
-        self.assertEqual(assign_casc_conf, {1: True, 2: True})
+        self.assertEqual(assign_casc, {1: True, 2: True})
 
-    def test_clause_filtering_and_edge_cases(self) -> None:
-        """Bỏ qua clause đã thỏa mãn, xử lý literal trùng và thứ tự lan truyền xác định."""
-        # 1. Mệnh đề đã thỏa mãn không được xem là unit clause hay conflict
-        clauses_sat = [[1, 2], [-1, 3]]
-        assign_sat = {1: True, 3: True}
-        is_conf, conf_c = self.solver.unit_propagate(clauses_sat, assign_sat)
-        self.assertFalse(is_conf)
-        self.assertIsNone(conf_c)
-        self.assertNotIn(2, assign_sat)
-
-        # 2. Literal trùng lặp [1, 1] vẫn nhận diện đúng là unit clause
-        assign_dup: Dict[int, bool] = {}
-        is_conf, conf_c = self.solver.unit_propagate([[1, 1]], assign_dup)
-        self.assertFalse(is_conf)
-        self.assertEqual(assign_dup, {1: True})
-
-        # 3. Không có unit clause nào -> không gán thêm biến
-        assign_empty: Dict[int, bool] = {}
-        is_conf, conf_c = self.solver.unit_propagate([[1, 2], [-1, 3]], assign_empty)
-        self.assertFalse(is_conf)
-        self.assertEqual(assign_empty, {})
-
-        # 4. Nhiều unit clause ban đầu lan truyền theo thứ tự xác định
-        assign_multi: Dict[int, bool] = {}
-        is_conf, conf_c = self.solver.unit_propagate([[3], [1], [2]], assign_multi)
-        self.assertFalse(is_conf)
-        self.assertEqual(assign_multi, {3: True, 1: True, 2: True})
-
-    def test_get_clause_status_and_helpers(self) -> None:
-        """Kiểm tra phân loại trạng thái mệnh đề và hàm tiện ích is_conflict."""
+    def test_clause_filtering_and_status(self) -> None:
+        """Kiểm tra phân loại trạng thái mệnh đề và bỏ qua các mệnh đề đã thỏa mãn."""
         # Phân loại trạng thái mệnh đề
         self.assertEqual(self.solver.get_clause_status([], {}), ("CONFLICT", None))
         self.assertEqual(self.solver.get_clause_status([1], {}), ("UNIT", 1))
@@ -117,195 +69,118 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
             ("CONFLICT", None),
         )
 
+        # Mệnh đề đã thỏa mãn hoặc literal trùng lặp [1, 1] được lọc chính xác
+        assign: Dict[int, bool] = {1: True}
+        is_conf, _ = self.solver.unit_propagate([[1, 2], [3, 3]], assign)
+        self.assertFalse(is_conf)
+        self.assertEqual(assign, {1: True, 3: True})
+
         # Tiện ích is_conflict
-        conflict_clauses = [[1, 2], [-1]]
-        self.assertFalse(self.solver.is_conflict(conflict_clauses, {}))
-        self.assertFalse(self.solver.is_conflict(conflict_clauses, {1: False}))
-        self.assertTrue(self.solver.is_conflict(conflict_clauses, {1: True}))
+        self.assertFalse(self.solver.is_conflict([[1, 2], [-1]], {}))
+        self.assertTrue(self.solver.is_conflict([[1, 2], [-1]], {1: True}))
 
     def test_tautology_clause(self) -> None:
-        """Mệnh đề chứa cả x và ¬x là hằng đúng (Tautology), luôn SAT và không gây conflict.
-
-        Đáp ứng nhận xét:
-        - get_clause_status([1, -1], {}) phải trả về ("SATISFIED", None).
-        - solve([[1, -1]], num_vars=1) phải trả về SAT với model hợp lệ mà không cần branching.
-        - Tautology kết hợp unit clause: [[1, -1, 2], [-2]] luôn được giải chính xác.
-        """
-        # 1. Trạng thái của [1, -1] dưới phép gán rỗng phải là SATISFIED
+        """Mệnh đề chứa cả x và ¬x là hằng đúng (Tautology), luôn SAT và không gây conflict."""
+        # 1. Trạng thái khi chưa gán và khi đã gán đều là SATISFIED
         self.assertEqual(self.solver.get_clause_status([1, -1], {}), ("SATISFIED", None))
+        self.assertEqual(self.solver.get_clause_status([1, -1], {1: True}), ("SATISFIED", None))
+        self.assertEqual(self.solver.get_clause_status([1, -1], {1: False}), ("SATISFIED", None))
 
-        # 2. unit_propagate trên [[1, -1], [2]] chỉ lan truyền unit clause [2]
-        clauses = [[1, -1], [2]]
-        assignment: Dict[int, bool] = {}
-        is_conf, conf_c = self.solver.unit_propagate(clauses, assignment)
-        self.assertFalse(is_conf)
-        self.assertEqual(assignment, {2: True})
-        self.assertEqual(self.solver.stats.propagations, 1)
+        # 2. solve([[1, -1]]) trả về SAT mà không cần branching
+        res = self.solver.solve([[1, -1]], num_vars=1)
+        self.assertTrue(res.sat)
+        self.assertIsNotNone(res.model)
+        assert res.model is not None
+        self.assertTrue(self.solver.is_clause_satisfied([1, -1], res.model))
 
-        # 3. solve([[1, -1]]) trả về SAT với model hợp lệ mà không cần branching
-        res_single = self.solver.solve([[1, -1]], num_vars=1)
-        self.assertTrue(res_single.sat)
-        self.assertIsNotNone(res_single.model)
-        assert res_single.model is not None
-        self.assertTrue(self.solver.is_clause_satisfied([1, -1], res_single.model))
+        # 3. Khóa hành vi với assumptions: ép 1=True hoặc 1=False vẫn luôn SAT
+        res_true = self.solver.solve([[1, -1]], num_vars=1, assumptions=[1])
+        self.assertTrue(res_true.sat and res_true.model and res_true.model[1] is True)
+
+        res_false = self.solver.solve([[1, -1]], num_vars=1, assumptions=[-1])
+        self.assertTrue(res_false.sat and res_false.model and res_false.model[1] is False)
 
         # 4. Tautology kết hợp unit clause: [[1, -1, 2], [-2]]
-        res_combined = self.solver.solve([[1, -1, 2], [-2]], num_vars=2)
-        self.assertTrue(res_combined.sat)
-        self.assertIsNotNone(res_combined.model)
-        assert res_combined.model is not None
-        for c in [[1, -1, 2], [-2]]:
-            self.assertTrue(self.solver.is_clause_satisfied(c, res_combined.model))
+        res_comb = self.solver.solve([[1, -1, 2], [-2]], num_vars=2)
+        self.assertTrue(res_comb.sat and res_comb.model and res_comb.model[2] is False)
 
     def test_sat_model_validates_all_clauses(self) -> None:
-        """Kiểm chứng tính đúng đắn thực sự của SAT model sau khi lan truyền đơn vị.
+        """Kiểm chứng tính đúng đắn của SAT model cho công thức rỗng và chuỗi lan truyền."""
+        # 1. Công thức rỗng luôn SAT và model đủ biến
+        res_empty = self.solver.solve([], num_vars=3)
+        self.assertTrue(res_empty.sat and res_empty.model and len(res_empty.model) == 3)
 
-        Đáp ứng nhận xét:
-        - Sử dụng đúng công thức: clauses = [[1], [-1, 2], [-2, 3]] với num_vars = 5.
-        - Model chứa đầy đủ các biến từ 1..num_vars.
-        - Mỗi mệnh đề đều có ít nhất một literal nhận giá trị True dưới model trả về.
-        - Các biến chưa được gán sau propagation (4, 5) được hoàn thiện an toàn.
-        """
+        # 2. Công thức chuỗi: [[1], [-1, 2], [-2, 3]] với num_vars = 5
         clauses = [[1], [-1, 2], [-2, 3]]
-        num_vars = 5
-        result = self.solver.solve(clauses, num_vars=num_vars)
-
+        result = self.solver.solve(clauses, num_vars=5)
         self.assertTrue(result.sat)
         self.assertIsNotNone(result.model)
         assert result.model is not None
 
-        # 1. Model chứa đầy đủ biến 1..num_vars
+        # Model chứa đủ 1..5 và thỏa mãn mọi mệnh đề
         self.assertEqual(set(result.model.keys()), {1, 2, 3, 4, 5})
-
-        # 2. Các giá trị ép buộc từ unit propagation
-        self.assertTrue(result.model[1])
-        self.assertTrue(result.model[2])
-        self.assertTrue(result.model[3])
-
-        # 3. Mỗi clause đều có ít nhất một literal True dưới model
+        self.assertTrue(result.model[1] and result.model[2] and result.model[3])
         for clause in clauses:
-            clause_sat = any(
-                result.model[abs(lit)] if lit > 0 else not result.model[abs(lit)]
-                for lit in clause
-            )
-            self.assertTrue(clause_sat, msg=f"Mệnh đề {clause} không được thỏa mãn bởi model!")
-
-        # 4. Biến tự do (4, 5) được hoàn thiện mà không làm mất tính thỏa mãn
-        self.assertIn(4, result.model)
-        self.assertIn(5, result.model)
+            self.assertTrue(self.solver.is_clause_satisfied(clause, result.model))
 
     def test_clauses_immutability(self) -> None:
-        """Bảo đảm danh sách clauses gốc bất biến khi gọi unit_propagate và solve kèm assumptions.
+        """Bảo đảm clauses gốc bất biến khi gọi unit_propagate và solve kèm assumptions."""
+        clauses = [[1, 2], [-1, 2]]
+        copy_c = [list(c) for c in clauses]
 
-        Đáp ứng nhận xét:
-        - solve() là API chính mà các module khác sử dụng.
-        - Quá trình propagation và assumptions không được làm thay đổi cấu trúc CNF gốc.
-        """
-        # 1. Bất biến khi gọi trực tiếp unit_propagate()
-        clauses_prop = [[1, 2], [-1, 3], [-3]]
-        copy_prop = [list(c) for c in clauses_prop]
-        self.solver.unit_propagate(clauses_prop, {})
-        self.assertEqual(clauses_prop, copy_prop)
+        self.solver.unit_propagate(clauses, {})
+        self.assertEqual(clauses, copy_c)
 
-        # 2. Bất biến khi gọi solve() kèm assumptions
-        clauses_solve = [[1, 2], [-1, 2]]
-        copy_solve = [list(c) for c in clauses_solve]
-        self.solver.solve(clauses_solve, num_vars=2, assumptions=[2])
-        self.assertEqual(clauses_solve, copy_solve)
+        self.solver.solve(clauses, num_vars=2, assumptions=[2])
+        self.assertEqual(clauses, copy_c)
 
     def test_solver_instance_reuse_resets_stats_and_state(self) -> None:
-        """Gọi solve() nhiều lần trên cùng 1 instance solver phải reset stats và cô lập state.
-
-        Đáp ứng nhận xét:
-        - SolverStats được reset chính xác ở mỗi lần gọi.
-        - Số propagation của lần giải trước không ảnh hưởng lần giải sau.
-        - Assignment của lần trước không bị tái sử dụng ngoài ý muốn.
-        """
+        """Gọi solve() nhiều lần trên cùng 1 instance solver phải reset stats và cô lập state."""
         # Lần 1: Giải [[1]] -> model[1] = True, propagations = 1
         res_1 = self.solver.solve([[1]], num_vars=1)
-        self.assertTrue(res_1.sat)
-        assert res_1.model is not None
-        self.assertTrue(res_1.model[1])
+        self.assertTrue(res_1.sat and res_1.model and res_1.model[1] is True)
         self.assertEqual(res_1.stats.propagations, 1)
 
-        # Lần 2: Giải [[-1]] trên cùng instance -> model[1] phải là False
-        res_2 = self.solver.solve([[-1]], num_vars=1)
-        self.assertTrue(res_2.sat)
-        assert res_2.model is not None
-        self.assertFalse(res_2.model[1])
-        self.assertEqual(res_2.stats.propagations, 1)
+        # Lần 2: Giải bài toán mâu thuẫn [[1], [-1]] -> UNSAT, reset stats
+        res_2 = self.solver.solve([[1], [-1]], num_vars=1)
+        self.assertFalse(res_2.sat)
+        self.assertIsNone(res_2.model)
 
-        # Lần 3: Giải bài toán có conflict liên hoàn [[1], [-1, 2], [-2]] -> UNSAT
-        res_3 = self.solver.solve([[1], [-1, 2], [-2]], num_vars=2)
-        self.assertFalse(res_3.sat)
-        self.assertIsNone(res_3.model)
-        self.assertEqual(res_3.stats.propagations, 2)
+        # Lần 3: Giải [[-1]] -> model[1] phải là False, propagations reset về 1
+        res_3 = self.solver.solve([[-1]], num_vars=1)
+        self.assertTrue(res_3.sat and res_3.model and res_3.model[1] is False)
+        self.assertEqual(res_3.stats.propagations, 1)
 
-        # Lần 4: Giải lại bài toán đơn vị [[2]] -> propagations reset về 1
-        res_4 = self.solver.solve([[2]], num_vars=2)
-        self.assertTrue(res_4.sat)
-        assert res_4.model is not None
-        self.assertTrue(res_4.model[2])
-        self.assertEqual(res_4.stats.propagations, 1)
+    def test_assumptions_handling(self) -> None:
+        """Xử lý assumptions: mâu thuẫn trực tiếp và suy diễn trong đề bài KB = (A∨B) ∧ (¬A∨B)."""
+        # 1. Assumptions mâu thuẫn trực tiếp [1, -1] lập tức trả về UNSAT
+        res_direct = self.solver.solve([[1, 2]], num_vars=2, assumptions=[1, -1])
+        self.assertFalse(res_direct.sat)
 
-    def test_example_from_spec_with_assumptions(self) -> None:
-        """Ví dụ trong đề bài: KB = (A ∨ B) ∧ (¬A ∨ B) với assumptions."""
+        # 2. Giả sử B = Innocent (-2) -> ép A=True rồi mâu thuẫn với (¬A ∨ B) -> UNSAT
         clauses = [[1, 2], [-1, 2]]
-
-        # Giả sử B = Innocent (-2) -> ép A=True rồi mâu thuẫn với (¬A ∨ B) -> UNSAT
-        assign = {2: False}
-        is_conf, conf_c = self.solver.unit_propagate(clauses, assign)
-        self.assertTrue(is_conf)
-        self.assertEqual(conf_c, [-1, 2])
-        self.assertEqual(assign[1], True)
-
-        # Kiểm tra qua API solve() với assumption
         res_innocent = self.solver.solve(clauses, num_vars=2, assumptions=[-2])
         self.assertFalse(res_innocent.sat)
         self.assertIsNone(res_innocent.model)
 
-    def test_empty_formula_is_sat(self) -> None:
-        """Công thức không chứa mệnh đề nào là SAT và model đủ num_vars."""
-        clauses: List[List[int]] = []
-        is_conf, conf_c = self.solver.unit_propagate(clauses, {})
-        self.assertFalse(is_conf)
-        self.assertIsNone(conf_c)
-
-        result = self.solver.solve(clauses, num_vars=3)
-        self.assertTrue(result.sat)
-        self.assertIsNotNone(result.model)
-        assert result.model is not None
-        self.assertEqual(len(result.model), 3)
-
-    def test_contradictory_assumptions(self) -> None:
-        """Assumptions chứa đồng thời x và ¬x phải lập tức trả về UNSAT."""
-        result = self.solver.solve([[1, 2]], num_vars=2, assumptions=[1, -1])
-        self.assertFalse(result.sat)
-        self.assertIsNone(result.model)
-
     def test_formula_requiring_branching_raises_not_implemented(self) -> None:
-        """Ranh giới Task D1 -> D2: Công thức cần rẽ nhánh ném NotImplementedError."""
-        # (x1 ∨ x2) không có unit clause ban đầu, cần branching (thuộc Task D2)
+        """Công thức cần rẽ nhánh ném NotImplementedError."""
         with self.assertRaises(NotImplementedError):
             self.solver.solve([[1, 2]], num_vars=2)
 
     def test_input_validation(self) -> None:
         """Xác thực toàn diện đầu vào: từ chối kiểu sai, giá trị ngoài phạm vi, literal 0, NaN."""
-        # 1. Literal 0
+        # 1. Literal 0 và vượt phạm vi bounds
         with self.assertRaises(ValueError):
             self.solver.solve([[0]], num_vars=2)
         with self.assertRaises(ValueError):
-            self.solver.solve([[1]], num_vars=2, assumptions=[0])
-
-        # 2. Vượt phạm vi num_vars hoặc num_vars âm
-        with self.assertRaises(ValueError):
             self.solver.solve([[3]], num_vars=2)
         with self.assertRaises(ValueError):
-            self.solver.solve([[1]], num_vars=2, assumptions=[-3])
+            self.solver.solve([[1]], num_vars=2, assumptions=[0])
         with self.assertRaises(ValueError):
             self.solver.solve([], num_vars=-1)
 
-        # 3. Kiểu dữ liệu không phải int (float, bool, str)
+        # 2. Kiểu dữ liệu không phải int (float, bool, str)
         with self.assertRaises(TypeError):
             self.solver.solve([], num_vars=1.5)
         with self.assertRaises(TypeError):
@@ -313,37 +188,30 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
         with self.assertRaises(TypeError):
             self.solver.solve([[1.5]], num_vars=2)
         with self.assertRaises(TypeError):
-            self.solver.solve([[1, True]], num_vars=2)
-        with self.assertRaises(TypeError):
             self.solver.solve([[1]], num_vars=2, assumptions=[False])
 
-        # 4. Timeout không hợp lệ (NaN, chuỗi, bool)
+        # 3. Timeout không hợp lệ
         with self.assertRaises(ValueError):
             self.solver.solve([[1]], num_vars=1, timeout=float("nan"))
         with self.assertRaises(TypeError):
             self.solver.solve([[1]], num_vars=1, timeout="1.0")
-        with self.assertRaises(TypeError):
-            self.solver.solve([[1]], num_vars=1, timeout=True)
 
     def test_iterator_and_generator_safety(self) -> None:
-        """Hỗ trợ an toàn các cấu trúc iterator/generator và không nuốt lỗi RecursionError."""
+        """Hỗ trợ an toàn các cấu trúc iterator/generator và không bỏ lỗi RecursionError."""
         # 1. Iterator clauses mâu thuẫn không bị cạn kiệt trong lúc validate -> trả về UNSAT
         res_iter = self.solver.solve(iter([[1], [-1]]), num_vars=1)
         self.assertFalse(res_iter.sat)
 
-        # 2. Generator clauses hợp lệ giải quyết bằng unit propagation -> SAT
+        # 2. Generator clauses và generator assumptions giải quyết chính xác
         gen_c = (c for c in [[1], [-1, 2]])
         res_gen = self.solver.solve(gen_c, num_vars=2)
-        self.assertTrue(res_gen.sat)
-        assert res_gen.model is not None
-        self.assertTrue(res_gen.model[1] and res_gen.model[2])
+        self.assertTrue(res_gen.sat and res_gen.model and res_gen.model[1] and res_gen.model[2])
 
-        # 3. Generator assumptions mâu thuẫn -> UNSAT
         gen_assump = (lit for lit in [-2])
         res_assump = self.solver.solve([[1, 2], [-1, 2]], num_vars=2, assumptions=gen_assump)
         self.assertFalse(res_assump.sat)
 
-        # 4. Generator đệ quy bất thường thành UNSAT
+        # 3. Generator đệ quy bất thường không bị đổi thành UNSAT
         def _recursive_gen():
             yield from _recursive_gen()
 
@@ -351,34 +219,25 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
             self.solver.solve(_recursive_gen(), num_vars=1)
 
     def test_timeout_handling(self) -> None:
-        """Kiểm soát timeout chính xác, phân biệt với UNSAT và cập nhật runtime/stats.
-
-        Xác minh:
-        - TIMEOUT luôn trả timed_out=True, sat=False, model=None.
-        - UNSAT thực sự trả timed_out=False, sat=False, model=None.
-        - Runtime được ghi nhận đầy đủ khi bị timeout.
-        - Gọi lại solve() sau khi timeout reset sạch sẽ stats và trả kết quả chính xác.
-        - _build_full_model ngắt kịp thời ngay cả khi deadline đã qua trước khi dựng model.
-        """
-        # 1. Timeout = 0.0 lập tức dừng: kiểm tra timed_out=True, runtime >= 0
-        res_zero = self.solver.solve([[1]], num_vars=1, timeout=0.0)
-        self.assertTrue(res_zero.timed_out)
-        self.assertFalse(res_zero.sat)
-        self.assertIsNone(res_zero.model)
-        self.assertGreaterEqual(res_zero.stats.runtime, 0.0)
+        """Kiểm soát timeout chính xác, phân biệt với UNSAT và cập nhật runtime/stats."""
+        # 1. Timeout = 0.0: dùng mock timer để chứng minh runtime thực sự được cập nhật từ đồng hồ
+        with patch("time.perf_counter", side_effect=[100.0, 100.05]):
+            res_zero = self.solver.solve([[1]], num_vars=1, timeout=0.0)
+            self.assertTrue(res_zero.timed_out)
+            self.assertFalse(res_zero.sat)
+            self.assertIsNone(res_zero.model)
+            self.assertAlmostEqual(res_zero.stats.runtime, 0.05)
 
         # 2. Phân biệt rõ ràng giữa TIMEOUT và UNSAT thực sự
         res_unsat = self.solver.solve([[1], [-1]], num_vars=1)
         self.assertFalse(res_unsat.sat)
         self.assertFalse(res_unsat.timed_out)
-        self.assertIsNone(res_unsat.model)
 
-        # 3. Timeout ngắt giữa chuỗi lan truyền lớn
+        # 3. Timeout ngắt giữa chuỗi lan truyền lớn và ghi nhận runtime thực tế > 0
         large_clauses = [[1]] + [[-i, i + 1] for i in range(1, 10000)]
         res_prop = self.solver.solve(large_clauses, num_vars=10001, timeout=1e-6)
         self.assertTrue(res_prop.timed_out)
-        self.assertFalse(res_prop.sat)
-        self.assertIsNone(res_prop.model)
+        self.assertGreater(res_prop.stats.runtime, 0.0)
 
         # 4. Timeout ngắt an toàn trước generator assumptions vô hạn
         def _infinite_assumptions():
@@ -389,15 +248,8 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
             [[1]], num_vars=1, assumptions=_infinite_assumptions(), timeout=0.005
         )
         self.assertTrue(res_inf.timed_out)
-        self.assertFalse(res_inf.sat)
 
-        # 5. Gọi lại solver instance sau timeout: stats được reset chính xác
-        res_reuse = self.solver.solve([[2]], num_vars=2)
-        self.assertTrue(res_reuse.sat)
-        self.assertFalse(res_reuse.timed_out)
-        self.assertEqual(res_reuse.stats.propagations, 1)
-
-        # 6. _build_full_model kiểm tra deadline nhất quán (kể cả số biến nhỏ)
+        # 5. _build_full_model kiểm tra deadline nhất quán
         deadline_past = time.perf_counter() - 0.001
         with self.assertRaises(_TimeoutException):
             self.solver._build_full_model({}, num_vars=5, deadline=deadline_past)

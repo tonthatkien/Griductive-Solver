@@ -1,4 +1,4 @@
-"""Bộ giải SAT sử dụng thuật toán DPLL thuần Python (Scope D - Task D1).
+"""Bộ giải SAT sử dụng thuật toán DPLL thuần Python.
 """
 import math
 import time
@@ -11,9 +11,9 @@ class SolverStats:
     """Thống kê chi tiết trong quá trình giải bài toán SAT.
 
     Thuộc tính:
-        decisions: Số lần chọn biến để rẽ nhánh (Scope D2).
-        propagations: Số literal được suy ra từ các unit clause (Scope D1).
-        backtracks: Số lần quay lui sau khi một nhánh dẫn tới mâu thuẫn (Scope D2).
+        decisions: Số lần chọn biến để rẽ nhánh.
+        propagations: Số literal được suy ra từ các unit clause.
+        backtracks: Số lần quay lui sau khi một nhánh dẫn tới mâu thuẫn .
         runtime: Tổng thời gian thực thi của thuật toán tính bằng giây (time.perf_counter).
     """
 
@@ -48,7 +48,7 @@ class _TimeoutException(Exception):
 
 
 class DPLLSolver:
-    """Bộ giải SAT sử dụng thuật toán DPLL thuần Python (Scope D - Task D1)."""
+    """Bộ giải SAT sử dụng thuật toán DPLL thuần Python."""
 
     def __init__(self) -> None:
         self.stats = SolverStats()
@@ -300,13 +300,6 @@ class DPLLSolver:
         timeout: Optional[float] = None,
     ) -> SolveResult:
         """Giải bài toán SAT bằng DPLL hỗ trợ assumptions và thống kê.
-
-        Trong phạm vi Task D1:
-        - Lan truyền mệnh đề đơn (Unit Propagation) và phát hiện mâu thuẫn (Conflict).
-        - Nếu công thức thỏa mãn hoàn toàn qua Unit Propagation -> SAT kèm model.
-        - Nếu phát hiện mâu thuẫn -> UNSAT (sat=False, model=None, timed_out=False).
-        - Nếu hết thời gian -> TIMEOUT (sat=False, model=None, timed_out=True).
-        - Nếu chưa thể giải quyết chỉ bằng Unit Propagation -> ném NotImplementedError.
         """
         start_time = time.perf_counter()
         self.stats = SolverStats()
@@ -325,7 +318,7 @@ class DPLLSolver:
                 self.stats.runtime = time.perf_counter() - start_time
                 return SolveResult(sat=False, model=None, stats=self.stats)
 
-            # 1. Lan truyền mệnh đề đơn (Unit Propagation - Scope D1)
+            # 1. Lan truyền mệnh đề đơn 
             is_conf, _ = self.unit_propagate(clauses_list, assignment, deadline=deadline)
             if is_conf:
                 self.stats.runtime = time.perf_counter() - start_time
@@ -337,7 +330,7 @@ class DPLLSolver:
                 self.stats.runtime = time.perf_counter() - start_time
                 return SolveResult(sat=True, model=model, stats=self.stats)
 
-            # 3. Chưa thể kết luận bằng Unit Propagation: cần branching & backtracking (D2)
+            # 3. Chưa thể kết luận bằng Unit Propagation: cần branching & backtracking
             self.stats.runtime = time.perf_counter() - start_time
             raise NotImplementedError(
                 "Công thức chưa thể kết luận chỉ bằng Unit Propagation. "
