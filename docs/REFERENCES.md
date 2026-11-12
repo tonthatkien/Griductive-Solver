@@ -39,4 +39,30 @@ Cột *Người ghi* điền tên người đưa nguồn này vào. Cột *Dùng
 |---|---|---|---|---|---|---|
 | 11 | Tài liệu thư viện | Pygame Documentation | https://www.pygame.org/docs/ | Xây dựng GUI (nếu nhóm chọn Pygame) | F | |
 
+## Fonts (GUI)
+
+> Cả 4 họ font đều tải từ Google Fonts và dùng giấy phép **SIL Open Font License 1.1** (được dùng, nhúng và phân phối trong sản phẩm, kể cả dùng cho đồ án). Chỉ nên đưa vào báo cáo họ font nào thực sự có trong giao diện. ⚠ Link chưa mở thử, người ghi cần kiểm tra lại như các nguồn ở trên.
+
+| STT | Loại | Tên / Tác giả | Link | Dùng để làm gì | Dùng cho (ID) | Người ghi |
+|---|---|---|---|---|---|---|
+| 12 | Font | Cinzel (Natanael Gama), file: Regular, Medium, SemiBold, Bold, ExtraBold, Black và bản VariableFont_wght. Giấy phép SIL OFL 1.1 | https://fonts.google.com/specimen/Cinzel | Font tiêu đề / chữ trang trí trong giao diện | F | |
+| 13 | Font | Courier Prime (Alan Dague-Greene, Quote-Unquote Apps), file: Regular, Italic, Bold, BoldItalic. Giấy phép SIL OFL 1.1 | https://fonts.google.com/specimen/Courier+Prime | Font monospace cho nội dung clue, KB, log | F | |
+| 14 | Font | Orbitron (Matt McInerney), file: Regular, Medium, SemiBold, Bold, ExtraBold, Black và bản VariableFont_wght. Giấy phép SIL OFL 1.1 | https://fonts.google.com/specimen/Orbitron | Font số / nhãn kiểu công nghệ trong giao diện | F | |
+| 15 | Font | Share Tech Mono (Carrois Apostrophe), file: Regular. Giấy phép SIL OFL 1.1 | https://fonts.google.com/specimen/Share+Tech+Mono | Font monospace cho thông số, số liệu (thống kê solver) | F | |
+
+## Âm thanh (GUI)
+
+| STT | Loại | Tên / Tác giả | Link | Dùng để làm gì | Dùng cho (ID) | Người ghi |
+|---|---|---|---|---|---|---|
+| 16 | Nhạc nền | `bgm.ogg`: *Detective Conan Main Theme* (album *Detective Conan - OST 1*), Katsuo Ohno Band | https://archive.org/details/DetectiveConanOriginalSountrack1/01+-+Detective+Conan+Main+Theme.mp3 | Nhạc nền của giao diện | F | |
+| 17 | Âm thanh | `click.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi click chuột | F | |
+| 18 | Âm thanh | `clue.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi chọn / hiện clue | F | |
+| 19 | Âm thanh | `correct.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi đặt đúng / suy luận đúng | F | |
+| 20 | Âm thanh | `hint.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi dùng gợi ý | F | |
+| 21 | Âm thanh | `not_provable.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi KB không chứng minh được (not provable) | F | |
+| 22 | Âm thanh | `radial.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi mở menu radial | F | |
+| 23 | Âm thanh | `step.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi solver chạy từng bước | F | |
+| 24 | Âm thanh | `thunder.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Hiệu ứng sấm / sự kiện mâu thuẫn hoặc lỗi | F | |
+| 25 | Âm thanh | `victory.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi giải xong puzzle | F | |
+
 > Thêm dòng mới ở cuối mỗi bảng (hoặc tạo bảng mới). Nguồn nào cuối cùng không dùng thì xóa khỏi danh sách trước khi đưa vào báo cáo.
