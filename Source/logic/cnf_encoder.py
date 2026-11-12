@@ -23,36 +23,69 @@ TODO(Scope C):
 Report cần: suy ra công thức cho 1 clue nhị phân (SAME/DIFFERENT) và 1 clue đếm (EXACTLY).
 """
 from dataclasses import dataclass
-from typing import List
+from typing import List, TYPE_CHECKING
+
+from engine import board
+from engine.clue import Clue
+from engine.constants import CRIMINAL, INNOCENT
+
+if TYPE_CHECKING:
+    from engine.game_state import PublicKB
 
 Clause = List[int]
 
 
 @dataclass
 class KB:
+    """Cơ sở tri thức dạng CNF kèm thống kê số biến"""
     clauses: List[Clause]
     num_primary: int
     num_aux: int
 
     @property
     def num_vars(self) -> int:
+        """Tổng số biến (primary + phụ), dùng làm num_vars khi gọi DPLL"""
         return self.num_primary + self.num_aux
+
+    @property
+    def num_clauses(self) -> int:
+        """Số clause của KB"""
+        return len(self.clauses)
 
 
 class Encoder:
+    """Đổi clue sang CNF; biến phụ được cấp tách riêng khỏi biến primary"""
+
     def __init__(self, n: int):
         self.n = n
-        self._next_aux = n * n + 1
+        self._next_aux = board.first_aux_var(n)
         self.num_aux = 0
 
+    @property
+    def num_primary(self) -> int:
+        """Số biến primary (mỗi ô một biến) = N*N"""
+        return self.n * self.n
+
     def new_aux(self) -> int:
+        """Cấp một biến phụ mới"""
         v = self._next_aux
         self._next_aux += 1
         self.num_aux += 1
         return v
 
-    def encode_clue(self, clue) -> List[Clause]:
-        raise NotImplementedError
+    def literal_of(self, cell: str, status: str) -> int:
+        """Literal của ô: +var nếu status là CRIMINAL, -var nếu là INNOCENT"""
+        if not board.is_valid_cell(cell, self.n):
+            raise ValueError(f"Cell is not valid: {cell!r}")
+        var = board.var_of(cell, self.n)
+        if status == CRIMINAL:
+            return var
+        if status == INNOCENT:
+            return -var
+        raise ValueError(f"Status is not valid: {status!r}")
 
-    def build_kb(self, public_kb) -> KB:
-        raise NotImplementedError
+    def encode_clue(self, clue: Clue) -> List[Clause]:
+        raise NotImplementedError("C2-C5")
+
+    def build_kb(self, public_kb: "PublicKB") -> KB:
+        raise NotImplementedError("C6")
