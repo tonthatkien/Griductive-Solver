@@ -57,12 +57,6 @@ Cột *Người ghi* điền tên người đưa nguồn này vào. Cột *Dùng
 | 16 | Nhạc nền | `bgm.ogg`: *Detective Conan Main Theme* (album *Detective Conan - OST 1*), Katsuo Ohno Band | https://archive.org/details/DetectiveConanOriginalSountrack1/01+-+Detective+Conan+Main+Theme.mp3 | Nhạc nền của giao diện | F | |
 | 17 | Âm thanh | `click.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi click chuột | F | |
 | 18 | Âm thanh | `clue.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi chọn / hiện clue | F | |
-| 19 | Âm thanh | `correct.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi đặt đúng / suy luận đúng | F | |
 | 20 | Âm thanh | `hint.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi dùng gợi ý | F | |
-| 21 | Âm thanh | `not_provable.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi KB không chứng minh được (not provable) | F | |
 | 22 | Âm thanh | `radial.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi mở menu radial | F | |
 | 23 | Âm thanh | `step.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi solver chạy từng bước | F | |
-| 24 | Âm thanh | `thunder.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Hiệu ứng sấm / sự kiện mâu thuẫn hoặc lỗi | F | |
-| 25 | Âm thanh | `victory.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi giải xong puzzle | F | |
-
-> Thêm dòng mới ở cuối mỗi bảng (hoặc tạo bảng mới). Nguồn nào cuối cùng không dùng thì xóa khỏi danh sách trước khi đưa vào báo cáo.
