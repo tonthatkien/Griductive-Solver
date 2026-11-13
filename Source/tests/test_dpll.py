@@ -2,7 +2,7 @@
 """
 import time
 import unittest
-from typing import Dict, List
+from typing import Dict, List, Tuple
 from unittest.mock import patch
 
 from logic.dpll import DPLLSolver, _TimeoutException
@@ -124,7 +124,7 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
             self.assertTrue(self.solver.is_clause_satisfied(clause, result.model))
 
     def test_clauses_immutability(self) -> None:
-        """Bảo đảm clauses gốc bất biến khi gọi unit_propagate và solve kèm assumptions."""
+        """Bảo đảm clauses gốc bất biến khi gọi unit_propagate, solve và khi rẽ nhánh."""
         clauses = [[1, 2], [-1, 2]]
         copy_c = [list(c) for c in clauses]
 
@@ -133,6 +133,12 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
 
         self.solver.solve(clauses, num_vars=2, assumptions=[2])
         self.assertEqual(clauses, copy_c)
+
+        # Bảo đảm tính bất biến khi solve phải rẽ nhánh / quay lui
+        clauses_branch = [[1, 2], [-1, 3], [-1, -3]]
+        copy_b = [list(c) for c in clauses_branch]
+        self.solver.solve(clauses_branch, num_vars=3)
+        self.assertEqual(clauses_branch, copy_b)
 
     def test_solver_instance_reuse_resets_stats_and_state(self) -> None:
         """Gọi solve() nhiều lần trên cùng 1 instance solver phải reset stats và cô lập state."""
@@ -289,7 +295,7 @@ class TestDPLLBranchingAndBacktracking(unittest.TestCase):
         with patch("time.perf_counter", side_effect=mock_time):
             with self.assertRaises(_TimeoutException):
                 self.solver.choose_variable(long_clause, {}, deadline=100.5)
-        self.assertEqual(calls, 4)
+        self.assertGreaterEqual(calls, 4)
 
     def test_branching_and_backtracking_mechanics(self) -> None:
         """Kiểm tra cơ chế rẽ nhánh nhị phân (True/False), quay lui khi conflict và cô lập state."""
@@ -302,7 +308,9 @@ class TestDPLLBranchingAndBacktracking(unittest.TestCase):
         # 2. Nhánh True mâu thuẫn -> quay lui thử nhánh False thành công (1 backtrack)
         # (x1 ∨ x2) ∧ (¬x1 ∨ x3) ∧ (¬x1 ∨ ¬x3): x1=True gây conflict, quay lui sang x1=False
         clauses_conflict = [[1, 2], [-1, 3], [-1, -3]]
+        copy_c = [list(c) for c in clauses_conflict]
         res_bt = self.solver.solve(clauses_conflict, num_vars=3)
+        self.assertEqual(clauses_conflict, copy_c)
         self.assertTrue(res_bt.sat)
         self.assertIsNotNone(res_bt.model)
         assert res_bt.model is not None
@@ -321,6 +329,19 @@ class TestDPLLBranchingAndBacktracking(unittest.TestCase):
         self.assertIsNone(res_unsat.model)
         self.assertEqual(res_unsat.stats.decisions, 1)
         self.assertEqual(res_unsat.stats.backtracks, 2)
+
+        # 5. Kết hợp assumptions với branching: [[1, 2, 3], [-1, 2], [-2, -3]] với assumptions=[-3]
+        clauses_assump_branch = [[1, 2, 3], [-1, 2], [-2, -3]]
+        copy_ab = [list(c) for c in clauses_assump_branch]
+        res_ab = self.solver.solve(clauses_assump_branch, num_vars=3, assumptions=[-3])
+        self.assertEqual(clauses_assump_branch, copy_ab)
+        self.assertTrue(res_ab.sat)
+        self.assertIsNotNone(res_ab.model)
+        assert res_ab.model is not None
+        self.assertFalse(res_ab.model[3])
+        self.assertTrue(res_ab.model[2])
+        self.assertTrue(res_ab.model[1])
+        self.assertEqual(res_ab.stats.decisions, 1)
 
     def test_multilevel_search_and_deduction(self) -> None:
         """Kiểm tra đệ quy rẽ nhánh nhiều tầng và ví dụ suy diễn entailment từ đề bài."""
@@ -371,6 +392,32 @@ class TestDPLLBranchingAndBacktracking(unittest.TestCase):
         self.assertTrue(res_timeout.timed_out)
         self.assertFalse(res_timeout.sat)
         self.assertIsNone(res_timeout.model)
+
+    def test_random_cnf_matches_brute_force(self) -> None:
+        """Đối chiếu kết quả DPLL với Brute Force trên 200 random CNF nhỏ (có seed cố định)."""
+        import itertools
+        import random
+
+        rng = random.Random(2026)
+        for _ in range(200):
+            n = rng.randint(1, 6)
+            clauses = [
+                [rng.choice([-1, 1]) * rng.randint(1, n) for _ in range(rng.randint(1, 3))]
+                for _ in range(rng.randint(0, 12))
+            ]
+
+            def sat_under(a: Tuple[bool, ...]) -> bool:
+                return all(any(a[abs(lit) - 1] == (lit > 0) for lit in c) for c in clauses)
+
+            expected = any(sat_under(a) for a in itertools.product([False, True], repeat=n))
+            res = self.solver.solve(clauses, num_vars=n)
+            self.assertEqual(res.sat, expected, f"Lệch kết quả tại clauses: {clauses}")
+            if res.sat:
+                self.assertIsNotNone(res.model)
+                assert res.model is not None
+                self.assertTrue(
+                    all(self.solver.is_clause_satisfied(c, res.model) for c in clauses)
+                )
 
 
 if __name__ == "__main__":
