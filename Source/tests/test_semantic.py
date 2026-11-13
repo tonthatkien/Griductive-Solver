@@ -197,13 +197,15 @@ class TestSemanticEvaluator(unittest.TestCase):
         with self.assertRaises(ValueError):
             eval_fact(bad_fact, self.assignment, self.n)
 
-        # Ô target ngoài lưới phải raise ValueError
-        with self.assertRaises(ValueError):
-            eval_fact(
-                {"type": "FACT", "target": "Z9", "status": "CRIMINAL"},
-                self.assignment,
-                self.n,
-            )
+        # Ô target ngoài lưới hoặc sai kiểu chuỗi phải raise ValueError
+        bad_targets = ["Z9", 123, True, ["A1"]]
+        for bad_t in bad_targets:
+            with self.assertRaises(ValueError, msg=f"Target={bad_t!r} không bị bắt lỗi"):
+                eval_fact(
+                    {"type": "FACT", "target": bad_t, "status": "CRIMINAL"},
+                    self.assignment,
+                    self.n,
+                )
 
     def test_eval_same_status(self):
         # B1 (F) và C1 (F) cùng status
@@ -227,6 +229,14 @@ class TestSemanticEvaluator(unittest.TestCase):
                 self.n,
             )
 
+        # Ô sai kiểu chuỗi (số, list) phải raise ValueError
+        with self.assertRaises(ValueError):
+            eval_same_status(
+                {"type": "SAME_STATUS", "cell1": 123, "cell2": "B1"},
+                self.assignment,
+                self.n,
+            )
+
     def test_eval_different_status(self):
         # A1 (T) và B1 (F) khác status
         clue_diff = {"type": "DIFFERENT_STATUS", "cell1": "A1", "cell2": "B1"}
@@ -241,6 +251,14 @@ class TestSemanticEvaluator(unittest.TestCase):
         with self.assertRaises(ValueError):
             eval_different_status(
                 {"type": "DIFFERENT_STATUS", "cell1": "B2", "cell2": "B2"},
+                self.assignment,
+                self.n,
+            )
+
+        # Ô sai kiểu chuỗi phải raise ValueError
+        with self.assertRaises(ValueError):
+            eval_different_status(
+                {"type": "DIFFERENT_STATUS", "cell1": "A1", "cell2": 456},
                 self.assignment,
                 self.n,
             )

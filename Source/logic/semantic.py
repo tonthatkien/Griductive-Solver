@@ -212,8 +212,8 @@ def eval_fact(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
     target = params.get("target") or params.get("cell")
     if not target:
         raise ValueError(f"FACT clue thiếu ô mục tiêu (target/cell): {params}")
-    if not board.is_valid_cell(target, n):
-        raise ValueError(f"Ô target {target!r} không nằm trong lưới {n}x{n}")
+    if not isinstance(target, str) or not board.is_valid_cell(target, n):
+        raise ValueError(f"Ô target {target!r} không hợp lệ hoặc không nằm trong lưới {n}x{n}")
 
     status = params.get("status")
     if status is None:
@@ -237,8 +237,13 @@ def eval_same_status(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
     c2 = params.get("cell2") or params.get("b")
     if not c1 or not c2:
         raise ValueError(f"Clue SAME thiếu cell1/cell2 (hoặc a/b): {params}")
-    if not board.is_valid_cell(c1, n) or not board.is_valid_cell(c2, n):
-        raise ValueError(f"Ô không hợp lệ trong clue SAME: ({c1}, {c2}) trên lưới {n}x{n}")
+    if (
+        not isinstance(c1, str)
+        or not isinstance(c2, str)
+        or not board.is_valid_cell(c1, n)
+        or not board.is_valid_cell(c2, n)
+    ):
+        raise ValueError(f"Ô không hợp lệ trong clue SAME: ({c1!r}, {c2!r}) trên lưới {n}x{n}")
     if c1 == c2:
         raise ValueError(f"Clue SAME yêu cầu 2 ô khác nhau, nhận được trùng ô: {c1!r}")
 
@@ -258,8 +263,13 @@ def eval_different_status(clue: Any, assignment: Dict[str, bool], n: int) -> boo
     c2 = params.get("cell2") or params.get("b")
     if not c1 or not c2:
         raise ValueError(f"Clue DIFFERENT thiếu cell1/cell2 (hoặc a/b): {params}")
-    if not board.is_valid_cell(c1, n) or not board.is_valid_cell(c2, n):
-        raise ValueError(f"Ô không hợp lệ trong clue DIFFERENT: ({c1}, {c2}) trên lưới {n}x{n}")
+    if (
+        not isinstance(c1, str)
+        or not isinstance(c2, str)
+        or not board.is_valid_cell(c1, n)
+        or not board.is_valid_cell(c2, n)
+    ):
+        raise ValueError(f"Ô không hợp lệ trong clue DIFFERENT: ({c1!r}, {c2!r}) trên lưới {n}x{n}")
     if c1 == c2:
         raise ValueError(f"Clue DIFFERENT yêu cầu 2 ô khác nhau, nhận được trùng ô: {c1!r}")
 
