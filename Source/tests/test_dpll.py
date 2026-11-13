@@ -24,7 +24,7 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
         self.assertEqual(assign_neg, {2: False})
         self.assertEqual(self.solver.stats.propagations, 1)
 
-        # 2. Chuỗi liên hoàn kết hợp co gọn mệnh đề:
+        # 2. Chuỗi kết hợp làm gọn mệnh đề:
         # [1] ép 1=True; [-1, 2] ép 2=True; [-2, -4, 3] với 4=True (literal -4=False) ép 3=True
         solver = DPLLSolver()
         assign_casc: Dict[int, bool] = {4: True}
