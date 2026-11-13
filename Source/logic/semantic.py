@@ -102,7 +102,6 @@ def resolve_region_cells(region: Dict[str, Any], n: int) -> List[str]:
         for c in raw_cells:
             if not isinstance(c, str) or not board.is_valid_cell(c, n):
                 raise ValueError(f"Cell {c!r} trong region không hợp lệ cho lưới {n}x{n}")
-        # Bắt buộc kiểm tra trùng lặp theo docs/INTERFACES.md mục 2.4 quy tắc 8
         if len(raw_cells) != len(set(raw_cells)):
             raise ValueError(f"Các ô trong region '{rtype}' không được trùng nhau: {raw_cells}")
         cells = list(raw_cells)
@@ -241,7 +240,6 @@ def eval_different_status(clue: Any, assignment: Dict[str, bool], n: int) -> boo
     """Đánh giá trực tiếp clue DIFFERENT / DIFFERENT_STATUS.
 
     Điều kiện: cell1 và cell2 có trạng thái khác nhau, với cell1 khác cell2
-    theo quy ước docs/INTERFACES.md mục 2.4.
     """
     _, params = _extract_clue_data(clue)
     c1 = params.get("cell1") or params.get("a")
@@ -321,7 +319,6 @@ def eval_parity(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
     """Đánh giá trực tiếp clue extension PARITY.
 
     Điều kiện: số ô trong region có trạng thái status là chẵn (EVEN) hoặc lẻ (ODD).
-    Quy ước docs/INTERFACES.md: count = 0 được tính là EVEN (chẵn).
     """
     _, params = _extract_clue_data(clue)
     if "region" not in params:

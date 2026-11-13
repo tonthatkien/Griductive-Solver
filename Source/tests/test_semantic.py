@@ -71,7 +71,6 @@ class TestSemanticEvaluator(unittest.TestCase):
         )
 
     def test_resolve_region_rejects_empty_region(self):
-        # Vùng rỗng bắt buộc phải raise ValueError theo REVIEW_GUIDE.md
         with self.assertRaises(ValueError):
             resolve_region_cells({"type": "list", "cells": []}, self.n)
 
@@ -79,7 +78,6 @@ class TestSemanticEvaluator(unittest.TestCase):
             resolve_region_cells({"type": "cells", "cells": []}, self.n)
 
     def test_resolve_region_rejects_duplicate_cells(self):
-        # Ô trùng trong region list phải bị từ chối theo INTERFACES.md 2.4 quy tắc 8
         bad_duplicates = [
             {"type": "list", "cells": ["A1", "A1"]},
             {"type": "cells", "cells": ["B2", "C3", "B2"]},
@@ -427,7 +425,6 @@ class TestSemanticEvaluator(unittest.TestCase):
         }
         self.assertFalse(eval_at_most(clue_single_k0_false, self.assignment, self.n))
 
-    # ------------------ Strict k Validation Tests ------------------
     def test_strict_k_validation(self):
         # k không phải int (float, str, bool) phải bị bắt lỗi
         bad_ks = [1.5, "1", True, False, 2.0]
@@ -462,8 +459,6 @@ class TestSemanticEvaluator(unittest.TestCase):
                     self.assignment,
                     self.n,
                 )
-
-    # ------------------ Extension Clues (Task D6) ------------------
     def test_eval_parity(self):
         # Hàng 1: A1=T, B1=F, C1=F -> Criminal = 1 (ODD)
         clue_odd = {
@@ -493,8 +488,6 @@ class TestSemanticEvaluator(unittest.TestCase):
         self.assertTrue(eval_parity(clue_even_row2, self.assignment, self.n))
 
     def test_eval_parity_zero_count_is_even(self):
-        # Quy ước docs/INTERFACES.md: count = 0 là EVEN.
-        # Dùng vùng hợp lệ 2 ô không rỗng: B1 và C1 đều là Innocent -> số Criminal = 0.
         clue_zero_even = {
             "type": "PARITY",
             "parity": "EVEN",
@@ -646,7 +639,7 @@ class TestSemanticEvaluator(unittest.TestCase):
         clues.append({"type": "FACT", "target": "B1", "status": "CRIMINAL"})
         self.assertFalse(evaluate_all(clues, self.assignment, self.n))
 
-    # ------------------ Test trực tiếp với puzzle thật p01.json ------------------
+    # Test trực tiếp với puzzle p01.json 
     def test_evaluate_against_real_puzzle_p01(self):
         puzzle_path = (
             Path(__file__).resolve().parent.parent / "data" / "puzzles_3x3" / "p01.json"
@@ -658,7 +651,7 @@ class TestSemanticEvaluator(unittest.TestCase):
         solution = {char["cell"]: char["criminal"] for char in data["characters"]}
         all_clues = [char["clue"] for char in data["characters"]]
 
-        # Tất cả các clue của p01.json PHẢI đúng trên nghiệm thật
+        # Tất cả các clue của p01.json phải đúng trên nghiệm thật
         for i, clue in enumerate(all_clues):
             self.assertTrue(
                 evaluate(clue, solution, n),
