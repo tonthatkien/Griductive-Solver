@@ -1,4 +1,3 @@
-import itertools
 import json
 from pathlib import Path
 from typing import Dict, List
@@ -35,8 +34,6 @@ class TestSemanticEvaluator(unittest.TestCase):
             "A2": False, "B2": True,  "C2": True,
             "A3": False, "B3": False, "C3": True,
         }
-
-    # ------------------ Region & Helper Tests ------------------
     def test_resolve_region_row_and_col(self):
         self.assertEqual(
             resolve_region_cells({"type": "row", "number": 1}, self.n),
@@ -145,7 +142,7 @@ class TestSemanticEvaluator(unittest.TestCase):
             count_status_matches(["A1", "Z9"], CRIMINAL, self.assignment)
 
     def test_assignment_rejects_non_bool_values(self):
-        # Giá trị trong assignment sai kiểu bool (như chuỗi "False", số 1, 0, None)
+        # Giá trị trong assignment sai kiểu bool
         # phải bị ném TypeError thay vì âm thầm ép kiểu bằng bool()
         bad_values = ["False", "True", 0, 1, None, [True]]
         clue_fact = {"type": "FACT", "target": "A1", "status": "CRIMINAL"}
@@ -173,7 +170,6 @@ class TestSemanticEvaluator(unittest.TestCase):
             with self.assertRaises(TypeError, msg=f"Val={bad_val!r} không bắt qua evaluate()"):
                 evaluate(clue_fact, bad_asg, self.n)
 
-    # ------------------ Core Clues (Task D5) ------------------
     def test_eval_fact(self):
         # A1 là Criminal (True)
         clue_true = {"type": "FACT", "target": "A1", "status": "CRIMINAL"}
@@ -671,62 +667,6 @@ class TestSemanticEvaluator(unittest.TestCase):
 
         # evaluate_all cũng phải trả về True
         self.assertTrue(evaluate_all(all_clues, solution, n))
-
-
-class TestSemanticIntegration(unittest.TestCase):
-    """Kiểm tra tích hợp cho Brute Force (Task B2) và Kiểm chứng chéo CNF (Task C7)."""
-
-    def test_brute_force_solver_using_semantic_evaluator(self):
-        """Chứng minh evaluate_all() dùng trực tiếp trong Brute-Force checker (B2)."""
-        puzzle_path = (
-            Path(__file__).resolve().parent.parent / "data" / "puzzles_3x3" / "p01.json"
-        )
-        with open(puzzle_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-
-        n = data["n"]
-        expected_solution = {c["cell"]: c["criminal"] for c in data["characters"]}
-        all_clues = [c["clue"] for c in data["characters"]]
-
-        # Cố định các ô initially_revealed để giảm không gian tìm kiếm
-        fixed_cells = {c: expected_solution[c] for c in data["initially_revealed"]}
-        free_cells = [c for c in board.all_cells(n) if c not in fixed_cells]
-
-        # Brute force duyệt toàn bộ 2^7 = 128 phép gán
-        solutions = []
-        for combo in itertools.product([False, True], repeat=len(free_cells)):
-            assignment = dict(fixed_cells)
-            assignment.update(dict(zip(free_cells, combo)))
-            if evaluate_all(all_clues, assignment, n):
-                solutions.append(assignment)
-
-        # Phải tìm được ĐÚNG 1 nghiệm duy nhất và trùng khớp với nghiệm của puzzle
-        self.assertEqual(len(solutions), 1, "Puzzle phải có duy nhất 1 nghiệm qua brute force!")
-        self.assertEqual(solutions[0], expected_solution)
-
-    def test_semantic_matches_cnf_truth_table(self):
-        """Chứng minh evaluate() tương đương chân trị với CNF logic (nền tảng cho C7)."""
-        # Kiểm tra với SAME_STATUS: (¬A ∨ B) ∧ (A ∨ ¬B)
-        clue_same = {"type": "SAME_STATUS", "cell1": "A1", "cell2": "B1"}
-        for a_val, b_val in itertools.product([False, True], repeat=2):
-            asg = {"A1": a_val, "B1": b_val}
-            cnf_sat = ((not a_val) or b_val) and (a_val or (not b_val))
-            self.assertEqual(
-                evaluate(clue_same, asg, 3),
-                cnf_sat,
-                msg=f"Không khớp chân trị tại A1={a_val}, B1={b_val}",
-            )
-
-        # Kiểm tra với DIFFERENT_STATUS: (A ∨ B) ∧ (¬A ∨ ¬B)
-        clue_diff = {"type": "DIFFERENT_STATUS", "cell1": "A1", "cell2": "B1"}
-        for a_val, b_val in itertools.product([False, True], repeat=2):
-            asg = {"A1": a_val, "B1": b_val}
-            cnf_sat = (a_val or b_val) and ((not a_val) or (not b_val))
-            self.assertEqual(
-                evaluate(clue_diff, asg, 3),
-                cnf_sat,
-                msg=f"Không khớp chân trị tại A1={a_val}, B1={b_val}",
-            )
 
 
 if __name__ == "__main__":

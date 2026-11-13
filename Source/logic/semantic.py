@@ -1,8 +1,4 @@
 """Semantic evaluator: kiểm tra tính đúng đắn của clue trên một assignment đầy đủ.
-
-Module này thực hiện đánh giá trực tiếp ngữ nghĩa của từng clue mà KHÔNG sử dụng
-CNF encoder (theo yêu cầu kiểm chứng độc lập của Task D5 và D6).
-Dùng chung cho brute force checker và kiểm chứng chéo với encoder trong test.
 """
 from typing import Any, Callable, Dict, List, Sequence, Tuple
 
@@ -52,16 +48,6 @@ def _extract_clue_data(clue: Any) -> Tuple[str, Dict[str, Any]]:
 
 def resolve_region_cells(region: Dict[str, Any], n: int) -> List[str]:
     """Phân giải đặc tả region thành danh sách cell ID duy nhất theo thứ tự row-major.
-
-    Hỗ trợ cả chuẩn docs/INTERFACES.md và engine/clue.py:
-      - row: {"number": 1} hoặc {"index": 1}
-      - col: {"letter": "B"} hoặc {"index": "B"}
-      - neighbors: {"cell": "C2"}
-      - list / cells: {"cells": ["A1", "B2"]}
-
-    Bắt lỗi vùng rỗng, ô trùng lặp, ô ngoài lưới, hoặc sai kiểu dữ liệu
-    theo docs/INTERFACES.md mục 2.4 và docs/REVIEW_GUIDE.md.
-
     Args:
         region: Dict mô tả vùng.
         n: Kích thước lưới n x n.
@@ -132,10 +118,6 @@ def resolve_region_cells(region: Dict[str, Any], n: int) -> List[str]:
 
 def _validate_k(k: Any, num_cells: int) -> int:
     """Kiểm tra k là số nguyên và nằm trong phạm vi [0, |R|].
-
-    Theo docs/INTERFACES.md mục 2.4 quy tắc 4:
-      0 <= k <= |R| với |R| là số ô của vùng (và k là int).
-
     Args:
         k: Giá trị k cần kiểm tra.
         num_cells: Số lượng ô của vùng (|R|).
@@ -160,7 +142,7 @@ def _validate_k(k: Any, num_cells: int) -> int:
 def _get_cell_bool(assignment: Dict[str, bool], cell: str) -> bool:
     """Lấy giá trị của ô trong assignment và kiểm tra nghiêm ngặt kiểu bool.
 
-    Ngăn ngừa lỗi ép kiểu âm thầm (ví dụ: chuỗi 'False', 'True', số 0, 1, None).
+    Ngăn ngừa lỗi ép kiểu âm thầm.
 
     Args:
         assignment: Dict cell -> bool.
@@ -190,9 +172,6 @@ def count_status_matches(
     assignment: Dict[str, bool],
 ) -> int:
     """Đếm số ô trong danh sách có trạng thái khớp với status chỉ định.
-
-    Quy ước: True = CRIMINAL, False = INNOCENT.
-
     Args:
         cells: Danh sách cell ID cần kiểm tra.
         status: CRIMINAL hoặc INNOCENT.
@@ -213,7 +192,7 @@ def count_status_matches(
 
 
 def eval_fact(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
-    """Đánh giá trực tiếp clue FACT (Task D5).
+    """Đánh giá trực tiếp clue FACT.
 
     Điều kiện: target có trạng thái bằng status (CRIMINAL / INNOCENT).
     """
@@ -236,10 +215,7 @@ def eval_fact(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
 
 
 def eval_same_status(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
-    """Đánh giá trực tiếp clue SAME / SAME_STATUS (Task D5).
-
-    Điều kiện: cell1 và cell2 có cùng trạng thái (cùng True hoặc cùng False),
-    với cell1 khác cell2 theo quy ước docs/INTERFACES.md mục 2.4.
+    """Đánh giá trực tiếp clue SAME / SAME_STATUS.
     """
     _, params = _extract_clue_data(clue)
     c1 = params.get("cell1") or params.get("a")
@@ -262,7 +238,7 @@ def eval_same_status(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
 
 
 def eval_different_status(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
-    """Đánh giá trực tiếp clue DIFFERENT / DIFFERENT_STATUS (Task D5).
+    """Đánh giá trực tiếp clue DIFFERENT / DIFFERENT_STATUS.
 
     Điều kiện: cell1 và cell2 có trạng thái khác nhau, với cell1 khác cell2
     theo quy ước docs/INTERFACES.md mục 2.4.
@@ -288,7 +264,7 @@ def eval_different_status(clue: Any, assignment: Dict[str, bool], n: int) -> boo
 
 
 def eval_exactly(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
-    """Đánh giá trực tiếp clue EXACTLY (Task D5).
+    """Đánh giá trực tiếp clue EXACTLY.
 
     Điều kiện: số ô trong region có trạng thái status đúng bằng k (với 0 <= k <= |R|).
     """
@@ -306,7 +282,7 @@ def eval_exactly(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
 
 
 def eval_at_least(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
-    """Đánh giá trực tiếp clue AT_LEAST (Task D5).
+    """Đánh giá trực tiếp clue AT_LEAST.
 
     Điều kiện: số ô trong region có trạng thái status >= k (với 0 <= k <= |R|).
     """
@@ -324,7 +300,7 @@ def eval_at_least(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
 
 
 def eval_at_most(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
-    """Đánh giá trực tiếp clue AT_MOST (Task D5).
+    """Đánh giá trực tiếp clue AT_MOST.
 
     Điều kiện: số ô trong region có trạng thái status <= k (với 0 <= k <= |R|).
     """
@@ -342,7 +318,7 @@ def eval_at_most(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
 
 
 def eval_parity(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
-    """Đánh giá trực tiếp clue extension PARITY (Task D6).
+    """Đánh giá trực tiếp clue extension PARITY.
 
     Điều kiện: số ô trong region có trạng thái status là chẵn (EVEN) hoặc lẻ (ODD).
     Quy ước docs/INTERFACES.md: count = 0 được tính là EVEN (chẵn).
@@ -364,7 +340,7 @@ def eval_parity(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
 
 
 def eval_compare(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
-    """Đánh giá trực tiếp clue extension COMPARE (Task D6).
+    """Đánh giá trực tiếp clue extension compare.
 
     Điều kiện: so sánh count(region1) op count(region2) cho trạng thái status.
     Toán tử hợp lệ: GT (>), GE (>=), EQ (==), LE (<=), LT (<).
@@ -398,7 +374,6 @@ def eval_compare(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
     return False
 
 
-# Các bí danh viết ngắn gọn theo tên template trong đề
 eval_same = eval_same_status
 eval_different = eval_different_status
 
@@ -441,15 +416,12 @@ def evaluate(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
 
 def evaluate_all(clues: Sequence[Any], assignment: Dict[str, bool], n: int) -> bool:
     """Đánh giá tập hợp nhiều clues trên cùng một assignment.
-
     Dùng cho brute force solver và kiểm tra nghiệm puzzle.
-
     Args:
         clues: Chuỗi các clues (dạng Clue hoặc dict).
         assignment: Dict ánh xạ cell id -> bool.
         n: Kích thước lưới n x n.
-
     Returns:
-        True nếu assignment thỏa mãn TẤT CẢ các clues, False nếu có ít nhất một clue vi phạm.
+        True nếu assignment thỏa mãn các clues, False nếu có ít nhất một clue vi phạm.
     """
     return all(evaluate(clue, assignment, n) for clue in clues)
