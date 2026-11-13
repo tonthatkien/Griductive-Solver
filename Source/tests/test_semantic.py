@@ -627,6 +627,17 @@ class TestSemanticEvaluator(unittest.TestCase):
         )
         self.assertTrue(evaluate(clue_obj, self.assignment, self.n))
 
+    def test_evaluate_rejects_non_string_clue_type(self):
+        # Trường 'type' không phải chuỗi (list, int, bool, None) phải raise ValueError
+        bad_types = [["FACT"], 123, True, False, None, {"nested": "FACT"}]
+        for bad_t in bad_types:
+            with self.assertRaises(ValueError, msg=f"Type={bad_t!r} không bị bắt lỗi"):
+                evaluate(
+                    {"type": bad_t, "target": "A1", "status": "CRIMINAL"},
+                    self.assignment,
+                    self.n,
+                )
+
     def test_evaluate_all_utility(self):
         clues = [
             {"type": "FACT", "target": "A1", "status": "CRIMINAL"},

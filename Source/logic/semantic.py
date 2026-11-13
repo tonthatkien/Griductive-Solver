@@ -28,17 +28,26 @@ def _extract_clue_data(clue: Any) -> Tuple[str, Dict[str, Any]]:
 
     Raises:
         TypeError: Nếu clue không phải là Clue hoặc dict.
-        ValueError: Nếu clue thiếu trường 'type'.
+        ValueError: Nếu clue thiếu trường 'type' hoặc trường 'type' không phải chuỗi (str).
     """
     if isinstance(clue, Clue):
-        return clue.type, dict(clue.params)
-    if isinstance(clue, dict):
+        clue_type = clue.type
+        params = dict(clue.params)
+    elif isinstance(clue, dict):
         params = dict(clue)
         clue_type = params.pop("type", None)
-        if not clue_type:
+        if clue_type is None:
             raise ValueError("Clue dict thiếu trường 'type'")
-        return clue_type, params
-    raise TypeError(f"Clue phải là Clue hoặc dict, nhận được: {type(clue).__name__}")
+    else:
+        raise TypeError(f"Clue phải là Clue hoặc dict, nhận được: {type(clue).__name__}")
+
+    if not isinstance(clue_type, str):
+        raise ValueError(
+            f"Trường 'type' của clue phải là chuỗi ký tự (str), nhận được: {clue_type!r} "
+            f"({type(clue_type).__name__})"
+        )
+
+    return clue_type, params
 
 
 def resolve_region_cells(region: Dict[str, Any], n: int) -> List[str]:
