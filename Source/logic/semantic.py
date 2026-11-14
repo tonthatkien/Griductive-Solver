@@ -182,7 +182,6 @@ def eval_same_status(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
     """Đánh giá trực tiếp clue SAME_STATUS.
 
     Điều kiện: cell1 và cell2 có cùng trạng thái (cùng True hoặc cùng False),
-    với cell1 khác cell2 theo quy ước docs/INTERFACES.md mục 2.4.
     """
     _, params = _extract_clue_data(clue)
     if "cell1" not in params or "cell2" not in params:
@@ -211,7 +210,6 @@ def eval_different_status(clue: Any, assignment: Dict[str, bool], n: int) -> boo
     """Đánh giá trực tiếp clue DIFFERENT_STATUS.
 
     Điều kiện: cell1 và cell2 có trạng thái khác nhau (một True một False),
-    với cell1 khác cell2 theo quy ước docs/INTERFACES.md mục 2.4.
     """
     _, params = _extract_clue_data(clue)
     if "cell1" not in params or "cell2" not in params:
@@ -295,7 +293,6 @@ def eval_parity(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
     """Đánh giá trực tiếp clue extension PARITY.
 
     Điều kiện: số ô trong region có trạng thái status là chẵn (EVEN) hoặc lẻ (ODD).
-    Quy ước docs/INTERFACES.md: count = 0 được tính là EVEN (chẵn).
     """
     _, params = _extract_clue_data(clue)
     if "region" not in params:
