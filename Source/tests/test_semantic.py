@@ -1,10 +1,10 @@
+import itertools
 import json
 from pathlib import Path
-from typing import Dict, List
 import unittest
 
 from engine import board
-from engine.clue import Clue
+from engine.clue import Clue, resolve_region
 from engine.constants import CRIMINAL, INNOCENT
 from logic.semantic import (
     count_status_matches,
@@ -34,13 +34,14 @@ class TestSemanticEvaluator(unittest.TestCase):
             "A2": False, "B2": True,  "C2": True,
             "A3": False, "B3": False, "C3": True,
         }
+
     def test_resolve_region_row_and_col(self):
         self.assertEqual(
             resolve_region_cells({"type": "row", "number": 1}, self.n),
             ["A1", "B1", "C1"],
         )
         self.assertEqual(
-            resolve_region_cells({"type": "row", "index": 2}, self.n),
+            resolve_region_cells({"type": "row", "number": 2}, self.n),
             ["A2", "B2", "C2"],
         )
         self.assertEqual(
@@ -48,7 +49,7 @@ class TestSemanticEvaluator(unittest.TestCase):
             ["B1", "B2", "B3"],
         )
         self.assertEqual(
-            resolve_region_cells({"type": "col", "index": "C"}, self.n),
+            resolve_region_cells({"type": "col", "letter": "C"}, self.n),
             ["C1", "C2", "C3"],
         )
 
@@ -64,23 +65,49 @@ class TestSemanticEvaluator(unittest.TestCase):
             resolve_region_cells({"type": "neighbors", "cell": "B2"}, self.n),
             expected_b2_neighbors,
         )
-        # type list / cells
+        # type list
         self.assertEqual(
             resolve_region_cells({"type": "list", "cells": ["C3", "A1"]}, self.n),
             ["A1", "C3"],
         )
 
+    def test_resolve_region_vs_engine_clue_resolve_region(self):
+        # Đối chiếu resolve_region_cells với engine.clue.resolve_region trên mọi row, col, neighbors
+        for size in (3, 4):
+            # Mọi hàng
+            for r in range(1, size + 1):
+                reg = {"type": "row", "number": r}
+                self.assertEqual(
+                    resolve_region_cells(reg, size),
+                    resolve_region(reg, size),
+                )
+            # Mọi cột
+            for c_letter in board.COLS[:size]:
+                reg = {"type": "col", "letter": c_letter}
+                self.assertEqual(
+                    resolve_region_cells(reg, size),
+                    resolve_region(reg, size),
+                )
+            # Mọi neighbors
+            for cell in board.all_cells(size):
+                reg = {"type": "neighbors", "cell": cell}
+                self.assertEqual(
+                    resolve_region_cells(reg, size),
+                    resolve_region(reg, size),
+                )
+
     def test_resolve_region_rejects_empty_region(self):
         with self.assertRaises(ValueError):
             resolve_region_cells({"type": "list", "cells": []}, self.n)
 
+    def test_resolve_region_rejects_tuple_cells(self):
         with self.assertRaises(ValueError):
-            resolve_region_cells({"type": "cells", "cells": []}, self.n)
+            resolve_region_cells({"type": "list", "cells": ("A1", "B1")}, self.n)
 
     def test_resolve_region_rejects_duplicate_cells(self):
         bad_duplicates = [
             {"type": "list", "cells": ["A1", "A1"]},
-            {"type": "cells", "cells": ["B2", "C3", "B2"]},
+            {"type": "list", "cells": ["B2", "C3", "B2"]},
         ]
         for region in bad_duplicates:
             with self.assertRaises(ValueError, msg=f"Không bắt lỗi ô trùng trong {region}"):
@@ -113,7 +140,7 @@ class TestSemanticEvaluator(unittest.TestCase):
         with self.assertRaises(ValueError):
             evaluate(clue_float_row, self.assignment, self.n)
 
-        # Cột không phải chữ cái hoa 1 ký tự hoặc ngoài lưới
+        # Cột không phải chữ cái in hoa 1 ký tự hoặc ngoài lưới
         bad_cols = ["b", "AB", 1, True, "D", ""]
         for bad_c in bad_cols:
             with self.assertRaises(ValueError, msg=f"Col={bad_c!r} không bị bắt lỗi"):
@@ -124,7 +151,7 @@ class TestSemanticEvaluator(unittest.TestCase):
         with self.assertRaises(ValueError):
             resolve_region_cells({"type": "list", "cells": ["Z9"]}, self.n)
 
-        # Phần tử không hash được (như list, dict) hoặc không phải string
+        # Phần tử không phải string hoặc sai kiểu
         unhashable_cases = [[["A1"]], [{"a": 1}], [123], [None]]
         for bad_cells in unhashable_cases:
             with self.assertRaises(ValueError, msg=f"Cells={bad_cells!r} phải ném ValueError"):
@@ -140,8 +167,7 @@ class TestSemanticEvaluator(unittest.TestCase):
             count_status_matches(["A1", "Z9"], CRIMINAL, self.assignment)
 
     def test_assignment_rejects_non_bool_values(self):
-        # Giá trị trong assignment sai kiểu bool
-        # phải bị ném TypeError thay vì âm thầm ép kiểu bằng bool()
+        # Giá trị trong assignment sai kiểu bool (phải bị ném TypeError)
         bad_values = ["False", "True", 0, 1, None, [True]]
         clue_fact = {"type": "FACT", "target": "A1", "status": "CRIMINAL"}
         clue_same = {"type": "SAME_STATUS", "cell1": "A1", "cell2": "B1"}
@@ -182,10 +208,6 @@ class TestSemanticEvaluator(unittest.TestCase):
         clue_wrong = {"type": "FACT", "target": "A1", "status": "INNOCENT"}
         self.assertFalse(eval_fact(clue_wrong, self.assignment, self.n))
 
-        # Hỗ trợ cell thay vì target
-        clue_cell_key = {"type": "FACT", "cell": "A1", "status": "CRIMINAL"}
-        self.assertTrue(eval_fact(clue_cell_key, self.assignment, self.n))
-
         # Thiếu status bắt buộc phải raise ValueError
         bad_fact = {"type": "FACT", "target": "A1"}
         with self.assertRaises(ValueError):
@@ -201,20 +223,22 @@ class TestSemanticEvaluator(unittest.TestCase):
                     self.n,
                 )
 
-    def test_eval_same_status(self):
-        # B1 (F) và C1 (F) cùng status
-        clue_same = {"type": "SAME_STATUS", "cell1": "B1", "cell2": "C1"}
-        self.assertTrue(eval_same_status(clue_same, self.assignment, self.n))
-        self.assertTrue(evaluate(clue_same, self.assignment, self.n))
+    def test_eval_same_status_truth_table_all_4_combinations(self):
+        # Kiểm tra đầy đủ bảng chân trị 4 tổ hợp: (T,T), (T,F), (F,T), (F,F)
+        clue_same = {"type": "SAME_STATUS", "cell1": "A1", "cell2": "B1"}
+        for val1, val2 in itertools.product([True, False], repeat=2):
+            asg = dict(self.assignment)
+            asg["A1"] = val1
+            asg["B1"] = val2
+            expected = (val1 == val2)
+            self.assertEqual(
+                eval_same_status(clue_same, asg, self.n),
+                expected,
+                msg=f"SAME_STATUS thất bại với tổ hợp ({val1}, {val2})",
+            )
+            self.assertEqual(evaluate(clue_same, asg, self.n), expected)
 
-        # B2 (T) và C2 (T) cùng status
-        clue_same_t = {"type": "SAME", "a": "B2", "b": "C2"}
-        self.assertTrue(eval_same_status(clue_same_t, self.assignment, self.n))
-
-        # A1 (T) và B1 (F) khác status
-        clue_diff = {"type": "SAME_STATUS", "cell1": "A1", "cell2": "B1"}
-        self.assertFalse(eval_same_status(clue_diff, self.assignment, self.n))
-
+    def test_eval_same_status_edge_cases(self):
         # Trùng 2 ô (cell1 == cell2) phải raise ValueError
         with self.assertRaises(ValueError):
             eval_same_status(
@@ -231,16 +255,22 @@ class TestSemanticEvaluator(unittest.TestCase):
                 self.n,
             )
 
-    def test_eval_different_status(self):
-        # A1 (T) và B1 (F) khác status
+    def test_eval_different_status_truth_table_all_4_combinations(self):
+        # Kiểm tra đầy đủ bảng chân trị 4 tổ hợp: (T,T), (T,F), (F,T), (F,F)
         clue_diff = {"type": "DIFFERENT_STATUS", "cell1": "A1", "cell2": "B1"}
-        self.assertTrue(eval_different_status(clue_diff, self.assignment, self.n))
-        self.assertTrue(evaluate(clue_diff, self.assignment, self.n))
+        for val1, val2 in itertools.product([True, False], repeat=2):
+            asg = dict(self.assignment)
+            asg["A1"] = val1
+            asg["B1"] = val2
+            expected = (val1 != val2)
+            self.assertEqual(
+                eval_different_status(clue_diff, asg, self.n),
+                expected,
+                msg=f"DIFFERENT_STATUS thất bại với tổ hợp ({val1}, {val2})",
+            )
+            self.assertEqual(evaluate(clue_diff, asg, self.n), expected)
 
-        # B1 (F) và C1 (F) cùng status -> different_status là False
-        clue_same = {"type": "DIFFERENT", "a": "B1", "b": "C1"}
-        self.assertFalse(eval_different_status(clue_same, self.assignment, self.n))
-
+    def test_eval_different_status_edge_cases(self):
         # Trùng 2 ô phải raise ValueError
         with self.assertRaises(ValueError):
             eval_different_status(
@@ -257,208 +287,99 @@ class TestSemanticEvaluator(unittest.TestCase):
                 self.n,
             )
 
-    def test_eval_exactly(self):
-        # Cột C: C1=F, C2=T, C3=T -> Criminal = 2, Innocent = 1
-        clue_c_crim = {
-            "type": "EXACTLY",
-            "region": {"type": "col", "letter": "C"},
-            "k": 2,
-            "status": "CRIMINAL",
-        }
-        self.assertTrue(eval_exactly(clue_c_crim, self.assignment, self.n))
-
-        clue_c_inn = {
-            "type": "EXACTLY",
-            "region": {"type": "col", "letter": "C"},
-            "k": 1,
-            "status": "INNOCENT",
-        }
-        self.assertTrue(eval_exactly(clue_c_inn, self.assignment, self.n))
-
-    def test_eval_exactly_edge_cases(self):
-        # Biên k = 0
-        clue_k0_false = {
-            "type": "EXACTLY",
-            "region": {"type": "row", "number": 1},
-            "k": 0,
-            "status": "CRIMINAL",
-        }
-        self.assertFalse(eval_exactly(clue_k0_false, self.assignment, self.n))
-
-        clue_k0_true = {
-            "type": "EXACTLY",
-            "region": {"type": "list", "cells": ["B1", "C1"]},
-            "k": 0,
-            "status": "CRIMINAL",
-        }
-        self.assertTrue(eval_exactly(clue_k0_true, self.assignment, self.n))
-
-        # Biên k = |R|
-        clue_k_max_true = {
-            "type": "EXACTLY",
-            "region": {"type": "list", "cells": ["B2", "C2"]},
-            "k": 2,
-            "status": "CRIMINAL",
-        }
-        self.assertTrue(eval_exactly(clue_k_max_true, self.assignment, self.n))
-
-        clue_k_max_false = {
-            "type": "EXACTLY",
-            "region": {"type": "row", "number": 2},
-            "k": 3,
-            "status": "CRIMINAL",
-        }
-        self.assertFalse(eval_exactly(clue_k_max_false, self.assignment, self.n))
-
-        # Biên vùng 1 ô (single-cell region)
-        clue_single_cell_k1 = {
-            "type": "EXACTLY",
-            "region": {"type": "list", "cells": ["A1"]},
-            "k": 1,
-            "status": "CRIMINAL",
-        }
-        self.assertTrue(eval_exactly(clue_single_cell_k1, self.assignment, self.n))
-
-        clue_single_cell_k0 = {
-            "type": "EXACTLY",
-            "region": {"type": "list", "cells": ["A1"]},
-            "k": 0,
-            "status": "CRIMINAL",
-        }
-        self.assertFalse(eval_exactly(clue_single_cell_k0, self.assignment, self.n))
-
-    def test_eval_at_least(self):
-        # Hàng 2: A2=F, B2=T, C2=T -> Criminal = 2
-        clue_at_least_1 = {
-            "type": "AT_LEAST",
-            "region": {"type": "row", "number": 2},
-            "k": 1,
-            "status": "CRIMINAL",
-        }
-        self.assertTrue(eval_at_least(clue_at_least_1, self.assignment, self.n))
-
-        clue_at_least_2 = {
-            "type": "AT_LEAST",
-            "region": {"type": "row", "number": 2},
-            "k": 2,
-            "status": "CRIMINAL",
-        }
-        self.assertTrue(eval_at_least(clue_at_least_2, self.assignment, self.n))
-
-        clue_at_least_3 = {
-            "type": "AT_LEAST",
-            "region": {"type": "row", "number": 2},
-            "k": 3,
-            "status": "CRIMINAL",
-        }
-        self.assertFalse(eval_at_least(clue_at_least_3, self.assignment, self.n))
-
-    def test_eval_at_least_edge_cases(self):
-        # Biên k = 0: luôn True vì số lượng không âm
-        clue_k_0 = {
-            "type": "AT_LEAST",
-            "region": {"type": "row", "number": 2},
-            "k": 0,
-            "status": "CRIMINAL",
-        }
-        self.assertTrue(eval_at_least(clue_k_0, self.assignment, self.n))
-
-        # Biên k = |R| trên vùng 1 ô
-        clue_single_k1 = {
-            "type": "AT_LEAST",
-            "region": {"type": "list", "cells": ["B2"]},
-            "k": 1,
-            "status": "CRIMINAL",
-        }
-        self.assertTrue(eval_at_least(clue_single_k1, self.assignment, self.n))
-
-        clue_single_k0 = {
-            "type": "AT_LEAST",
-            "region": {"type": "list", "cells": ["A2"]},
-            "k": 0,
-            "status": "CRIMINAL",
-        }
-        self.assertTrue(eval_at_least(clue_single_k0, self.assignment, self.n))
-
-    def test_eval_at_most(self):
-        # Hàng 2: Criminal = 2
-        clue_at_most_2 = {
-            "type": "AT_MOST",
-            "region": {"type": "row", "number": 2},
-            "k": 2,
-            "status": "CRIMINAL",
-        }
-        self.assertTrue(eval_at_most(clue_at_most_2, self.assignment, self.n))
-
-        clue_at_most_1 = {
-            "type": "AT_MOST",
-            "region": {"type": "row", "number": 2},
-            "k": 1,
-            "status": "CRIMINAL",
-        }
-        self.assertFalse(eval_at_most(clue_at_most_1, self.assignment, self.n))
-
-    def test_eval_at_most_edge_cases(self):
-        # Biên k = |R|: luôn True vì số lượng tối đa là |R|
-        clue_at_most_max = {
-            "type": "AT_MOST",
-            "region": {"type": "row", "number": 2},
-            "k": 3,
-            "status": "CRIMINAL",
-        }
-        self.assertTrue(eval_at_most(clue_at_most_max, self.assignment, self.n))
-
-        # Biên k = 0 trên vùng 1 ô
-        clue_single_k0_true = {
-            "type": "AT_MOST",
-            "region": {"type": "list", "cells": ["A2"]},
-            "k": 0,
-            "status": "CRIMINAL",
-        }
-        self.assertTrue(eval_at_most(clue_single_k0_true, self.assignment, self.n))
-
-        clue_single_k0_false = {
-            "type": "AT_MOST",
-            "region": {"type": "list", "cells": ["A1"]},
-            "k": 0,
-            "status": "CRIMINAL",
-        }
-        self.assertFalse(eval_at_most(clue_single_k0_false, self.assignment, self.n))
+    def test_exhaustive_counting_clues(self):
+        # Duyệt mọi assignment 2^3 của vùng 3 ô, mọi k trong 0..3, cả 2 status
+        # Kiểm chứng toàn diện cho EXACTLY, AT_LEAST, AT_MOST
+        region_cells = ["A1", "B1", "C1"]
+        region = {"type": "list", "cells": region_cells}
+        for vals in itertools.product([True, False], repeat=3):
+            asg = dict(self.assignment)
+            for c, v in zip(region_cells, vals):
+                asg[c] = v
+            for status in ("CRIMINAL", "INNOCENT"):
+                target_val = (status == "CRIMINAL")
+                count = sum(1 for v in vals if v == target_val)
+                for k in range(4):
+                    clue_exact = {
+                        "type": "EXACTLY", "region": region, "k": k, "status": status,
+                    }
+                    clue_ge = {
+                        "type": "AT_LEAST", "region": region, "k": k, "status": status,
+                    }
+                    clue_le = {
+                        "type": "AT_MOST", "region": region, "k": k, "status": status,
+                    }
+                    self.assertEqual(
+                        eval_exactly(clue_exact, asg, self.n),
+                        count == k,
+                        msg=f"EXACTLY thất bại: vals={vals}, status={status}, k={k}",
+                    )
+                    self.assertEqual(
+                        eval_at_least(clue_ge, asg, self.n),
+                        count >= k,
+                        msg=f"AT_LEAST thất bại: vals={vals}, status={status}, k={k}",
+                    )
+                    self.assertEqual(
+                        eval_at_most(clue_le, asg, self.n),
+                        count <= k,
+                        msg=f"AT_MOST thất bại: vals={vals}, status={status}, k={k}",
+                    )
 
     def test_strict_k_validation(self):
-        # k không phải int (float, str, bool) phải bị bắt lỗi
         bad_ks = [1.5, "1", True, False, 2.0]
         region = {"type": "row", "number": 1}
-
         for bad_k in bad_ks:
-            with self.assertRaises(ValueError, msg=f"k={bad_k!r} không bị bắt lỗi!"):
+            with self.assertRaises(ValueError, msg=f"k={bad_k!r} không bị bắt lỗi"):
                 eval_exactly(
                     {"type": "EXACTLY", "region": region, "k": bad_k},
                     self.assignment,
                     self.n,
                 )
-            with self.assertRaises(ValueError, msg=f"k={bad_k!r} không bị bắt lỗi!"):
+            with self.assertRaises(ValueError, msg=f"k={bad_k!r} không bị bắt lỗi"):
                 eval_at_least(
                     {"type": "AT_LEAST", "region": region, "k": bad_k},
                     self.assignment,
                     self.n,
                 )
-            with self.assertRaises(ValueError, msg=f"k={bad_k!r} không bị bắt lỗi!"):
+            with self.assertRaises(ValueError, msg=f"k={bad_k!r} không bị bắt lỗi"):
                 eval_at_most(
                     {"type": "AT_MOST", "region": region, "k": bad_k},
                     self.assignment,
                     self.n,
                 )
 
-        # k ngoài phạm vi [0, |R|] phải raise ValueError
+        # k nằm ngoài phạm vi [0, |R|]
         out_of_bounds_ks = [-1, 4, 10]
         for bad_k in out_of_bounds_ks:
-            with self.assertRaises(ValueError, msg=f"k={bad_k} ngoài [0, 3] không bị bắt!"):
+            with self.assertRaises(ValueError, msg=f"k ngoài biên {bad_k} không bị bắt"):
                 eval_exactly(
                     {"type": "EXACTLY", "region": region, "k": bad_k},
                     self.assignment,
                     self.n,
                 )
+
+    def test_counting_clues_missing_params_and_invalid_status(self):
+        region = {"type": "row", "number": 1}
+        # Thiếu region hoặc thiếu k
+        with self.assertRaises(ValueError):
+            eval_exactly({"type": "EXACTLY", "k": 1}, self.assignment, self.n)
+        with self.assertRaises(ValueError):
+            eval_exactly({"type": "EXACTLY", "region": region}, self.assignment, self.n)
+        with self.assertRaises(ValueError):
+            eval_at_least({"type": "AT_LEAST", "k": 1}, self.assignment, self.n)
+        with self.assertRaises(ValueError):
+            eval_at_most({"type": "AT_MOST", "k": 1}, self.assignment, self.n)
+
+        # Status sai (ví dụ chữ thường 'criminal' hoặc chuỗi lạ)
+        for bad_st in ["criminal", "innocent", "UNKNOWN", 123]:
+            with self.assertRaises(ValueError):
+                eval_exactly(
+                    {"type": "EXACTLY", "region": region, "k": 1, "status": bad_st},
+                    self.assignment,
+                    self.n,
+                )
+
+
     def test_eval_parity(self):
         # Hàng 1: A1=T, B1=F, C1=F -> Criminal = 1 (ODD)
         clue_odd = {
@@ -488,6 +409,7 @@ class TestSemanticEvaluator(unittest.TestCase):
         self.assertTrue(eval_parity(clue_even_row2, self.assignment, self.n))
 
     def test_eval_parity_zero_count_is_even(self):
+        # Quy ước: count = 0 là EVEN
         clue_zero_even = {
             "type": "PARITY",
             "parity": "EVEN",
@@ -553,18 +475,17 @@ class TestSemanticEvaluator(unittest.TestCase):
         }
         self.assertTrue(eval_compare(clue_eq, self.assignment, self.n))
 
-        # GE với alias left/right
+        # GE: Hàng 1 (1 crim) >= Cột A (1 crim) -> True
         clue_ge = {
             "type": "COMPARE",
-            "left": {"type": "row", "number": 1},
+            "region1": {"type": "row", "number": 1},
             "op": "GE",
-            "right": {"type": "col", "letter": "A"},
+            "region2": {"type": "col", "letter": "A"},
             "status": "CRIMINAL",
         }
         self.assertTrue(eval_compare(clue_ge, self.assignment, self.n))
 
     def test_eval_compare_le_operator(self):
-        # Kiểm tra trực tiếp toán tử LE (<=)
         # Hàng 1 (1 crim) <= Cột C (2 crim): 1 <= 2 -> True
         clue_le_less = {
             "type": "COMPARE",
@@ -606,6 +527,172 @@ class TestSemanticEvaluator(unittest.TestCase):
         }
         self.assertTrue(eval_compare(clue_single_cmp, self.assignment, self.n))
 
+    def test_eval_compare_rejects_old_left_right(self):
+        clue_left = {
+            "type": "COMPARE",
+            "left": {"type": "row", "number": 1},
+            "op": "GE",
+            "region2": {"type": "col", "letter": "A"},
+            "status": "CRIMINAL",
+        }
+        with self.assertRaises(ValueError):
+            eval_compare(clue_left, self.assignment, self.n)
+
+        clue_right = {
+            "type": "COMPARE",
+            "region1": {"type": "row", "number": 1},
+            "op": "GE",
+            "right": {"type": "col", "letter": "A"},
+            "status": "CRIMINAL",
+        }
+        with self.assertRaises(ValueError):
+            eval_compare(clue_right, self.assignment, self.n)
+
+    def test_eval_compare_status_innocent(self):
+        # Đánh giá COMPARE khi status=INNOCENT
+        # Hàng 1: A1=T, B1=F, C1=F -> Innocent count = 2
+        # Hàng 2: A2=F, B2=T, C2=T -> Innocent count = 1
+        # Cột A: A1=T, A2=F, A3=F -> Innocent count = 2
+        clue_inn_gt = {
+            "type": "COMPARE",
+            "region1": {"type": "row", "number": 1},
+            "op": "GT",
+            "region2": {"type": "row", "number": 2},
+            "status": "INNOCENT",
+        }
+        self.assertTrue(eval_compare(clue_inn_gt, self.assignment, self.n))
+
+        clue_inn_eq = {
+            "type": "COMPARE",
+            "region1": {"type": "row", "number": 1},
+            "op": "EQ",
+            "region2": {"type": "col", "letter": "A"},
+            "status": "INNOCENT",
+        }
+        self.assertTrue(eval_compare(clue_inn_eq, self.assignment, self.n))
+
+    def test_eval_compare_invalid_inputs(self):
+        # Thiếu region1 hoặc region2
+        with self.assertRaises(ValueError):
+            eval_compare(
+                {"type": "COMPARE", "region2": {"type": "row", "number": 1}, "op": "EQ"},
+                self.assignment,
+                self.n,
+            )
+        with self.assertRaises(ValueError):
+            eval_compare(
+                {"type": "COMPARE", "region1": {"type": "row", "number": 1}, "op": "EQ"},
+                self.assignment,
+                self.n,
+            )
+
+        # Toán tử op không hợp lệ
+        for bad_op in ["INVALID", ">", "==", None]:
+            with self.assertRaises(ValueError):
+                eval_compare(
+                    {
+                        "type": "COMPARE",
+                        "region1": {"type": "row", "number": 1},
+                        "op": bad_op,
+                        "region2": {"type": "col", "letter": "A"},
+                    },
+                    self.assignment,
+                    self.n,
+                )
+
+        # Status sai (ví dụ chữ thường 'criminal' hoặc giá trị lạ)
+        for bad_status in ["criminal", "innocent", "UNKNOWN", 123]:
+            with self.assertRaises(ValueError):
+                eval_compare(
+                    {
+                        "type": "COMPARE",
+                        "region1": {"type": "row", "number": 1},
+                        "op": "EQ",
+                        "region2": {"type": "col", "letter": "A"},
+                        "status": bad_status,
+                    },
+                    self.assignment,
+                    self.n,
+                )
+
+        # Region sai cấu trúc trong COMPARE
+        with self.assertRaises(ValueError):
+            eval_compare(
+                {
+                    "type": "COMPARE",
+                    "region1": {"type": "row", "number": 99},
+                    "op": "EQ",
+                    "region2": {"type": "col", "letter": "A"},
+                },
+                self.assignment,
+                self.n,
+            )
+
+    def test_eval_parity_status_innocent(self):
+        # Hàng 1: A1=T, B1=F, C1=F -> Innocent count = 2 (EVEN)
+        clue_inn_even = {
+            "type": "PARITY",
+            "parity": "EVEN",
+            "region": {"type": "row", "number": 1},
+            "status": "INNOCENT",
+        }
+        self.assertTrue(eval_parity(clue_inn_even, self.assignment, self.n))
+
+        clue_inn_odd = {
+            "type": "PARITY",
+            "parity": "ODD",
+            "region": {"type": "row", "number": 1},
+            "status": "INNOCENT",
+        }
+        self.assertFalse(eval_parity(clue_inn_odd, self.assignment, self.n))
+
+        # Hàng 2: A2=F, B2=T, C2=T -> Innocent count = 1 (ODD)
+        clue_row2_inn_odd = {
+            "type": "PARITY",
+            "parity": "ODD",
+            "region": {"type": "row", "number": 2},
+            "status": "INNOCENT",
+        }
+        self.assertTrue(eval_parity(clue_row2_inn_odd, self.assignment, self.n))
+
+    def test_eval_parity_invalid_inputs(self):
+        # Thiếu region hoặc parity
+        with self.assertRaises(ValueError):
+            eval_parity({"type": "PARITY", "parity": "EVEN"}, self.assignment, self.n)
+        with self.assertRaises(ValueError):
+            eval_parity(
+                {"type": "PARITY", "region": {"type": "row", "number": 1}},
+                self.assignment,
+                self.n,
+            )
+
+        # Parity không hợp lệ
+        for bad_p in ["even", "odd", "UNKNOWN", 123]:
+            with self.assertRaises(ValueError):
+                eval_parity(
+                    {
+                        "type": "PARITY",
+                        "parity": bad_p,
+                        "region": {"type": "row", "number": 1},
+                    },
+                    self.assignment,
+                    self.n,
+                )
+
+        # Status sai (ví dụ chữ thường 'criminal' hoặc giá trị lạ)
+        for bad_status in ["criminal", "innocent", "UNKNOWN", 123]:
+            with self.assertRaises(ValueError):
+                eval_parity(
+                    {
+                        "type": "PARITY",
+                        "parity": "EVEN",
+                        "region": {"type": "row", "number": 1},
+                        "status": bad_status,
+                    },
+                    self.assignment,
+                    self.n,
+                )
+
     def test_clue_object_support(self):
         # Hỗ trợ đối tượng Clue từ engine.clue
         clue_obj = Clue(
@@ -616,8 +703,29 @@ class TestSemanticEvaluator(unittest.TestCase):
         )
         self.assertTrue(evaluate(clue_obj, self.assignment, self.n))
 
+        # Đối tượng Clue cho PARITY
+        clue_parity = Clue(
+            id="clue_A2",
+            owner="A2",
+            type="PARITY",
+            params={"region": {"type": "row", "number": 1}, "parity": "ODD"},
+        )
+        self.assertTrue(evaluate(clue_parity, self.assignment, self.n))
+
+        # Đối tượng Clue cho COMPARE
+        clue_compare = Clue(
+            id="clue_A3",
+            owner="A3",
+            type="COMPARE",
+            params={
+                "region1": {"type": "col", "letter": "C"},
+                "op": "GT",
+                "region2": {"type": "col", "letter": "A"},
+            },
+        )
+        self.assertTrue(evaluate(clue_compare, self.assignment, self.n))
+
     def test_evaluate_rejects_non_string_clue_type(self):
-        # Trường 'type' không phải chuỗi (list, int, bool, None) phải raise ValueError
         bad_types = [["FACT"], 123, True, False, None, {"nested": "FACT"}]
         for bad_t in bad_types:
             with self.assertRaises(ValueError, msg=f"Type={bad_t!r} không bị bắt lỗi"):
@@ -627,11 +735,72 @@ class TestSemanticEvaluator(unittest.TestCase):
                     self.n,
                 )
 
+    def test_evaluate_rejects_unknown_clue_type(self):
+        with self.assertRaises(ValueError):
+            evaluate(
+                {"type": "UNKNOWN_CLUE", "target": "A1"},
+                self.assignment,
+                self.n,
+            )
+
+    def test_evaluate_rejects_invalid_clue_container(self):
+        # Clue không phải Clue hay dict -> TypeError
+        for bad_c in [123, "not_a_clue", ["FACT"], None]:
+            with self.assertRaises(TypeError):
+                evaluate(bad_c, self.assignment, self.n)
+
+    def test_reject_deprecated_aliases(self):
+        # 1. SAME và DIFFERENT bị loại khỏi CLUE_EVALUATORS
+        with self.assertRaises(ValueError):
+            evaluate({"type": "SAME", "cell1": "A1", "cell2": "B1"}, self.assignment, self.n)
+        with self.assertRaises(ValueError):
+            evaluate(
+                {"type": "DIFFERENT", "cell1": "A1", "cell2": "B1"}, self.assignment, self.n
+            )
+
+        # 2. FACT dùng cell thay vì target
+        with self.assertRaises(ValueError):
+            eval_fact({"type": "FACT", "cell": "A1", "status": "CRIMINAL"}, self.assignment, self.n)
+
+        # 3. SAME_STATUS dùng a/b thay vì cell1/cell2
+        with self.assertRaises(ValueError):
+            eval_same_status(
+                {"type": "SAME_STATUS", "a": "A1", "b": "B1"}, self.assignment, self.n
+            )
+
+        # 4. DIFFERENT_STATUS dùng a/b thay vì cell1/cell2
+        with self.assertRaises(ValueError):
+            eval_different_status(
+                {"type": "DIFFERENT_STATUS", "a": "A1", "b": "B1"}, self.assignment, self.n
+            )
+
+        # 5. Region row dùng index thay vì number
+        with self.assertRaises(ValueError):
+            resolve_region_cells({"type": "row", "index": 1}, self.n)
+
+        # 6. Region col dùng index thay vì letter
+        with self.assertRaises(ValueError):
+            resolve_region_cells({"type": "col", "index": "A"}, self.n)
+
+        # 7. Region cells thay vì list
+        with self.assertRaises(ValueError):
+            resolve_region_cells({"type": "cells", "cells": ["A1", "B1"]}, self.n)
+
     def test_evaluate_all_utility(self):
+        # evaluate_all([]) danh sách rỗng phải trả về True
+        self.assertTrue(evaluate_all([], self.assignment, self.n))
+
         clues = [
             {"type": "FACT", "target": "A1", "status": "CRIMINAL"},
             {"type": "SAME_STATUS", "cell1": "B1", "cell2": "C1"},
             {"type": "EXACTLY", "region": {"type": "row", "number": 2}, "k": 2},
+            {"type": "PARITY", "region": {"type": "row", "number": 1}, "parity": "ODD"},
+            {
+                "type": "COMPARE",
+                "region1": {"type": "col", "letter": "C"},
+                "op": "GT",
+                "region2": {"type": "col", "letter": "A"},
+            },
         ]
         self.assertTrue(evaluate_all(clues, self.assignment, self.n))
 
@@ -639,27 +808,30 @@ class TestSemanticEvaluator(unittest.TestCase):
         clues.append({"type": "FACT", "target": "B1", "status": "CRIMINAL"})
         self.assertFalse(evaluate_all(clues, self.assignment, self.n))
 
-    # Test trực tiếp với puzzle p01.json 
-    def test_evaluate_against_real_puzzle_p01(self):
-        puzzle_path = (
-            Path(__file__).resolve().parent.parent / "data" / "puzzles_3x3" / "p01.json"
-        )
-        with open(puzzle_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
+    # Quét mọi puzzle trong data/puzzles_*/*.json bằng glob + subTest
+    def test_evaluate_against_real_puzzles(self):
+        data_dir = Path(__file__).resolve().parent.parent / "data"
+        puzzle_files = sorted(data_dir.glob("puzzles_*/*.json"))
+        self.assertTrue(len(puzzle_files) > 0, "Không tìm thấy file puzzle nào trong data/")
 
-        n = data["n"]
-        solution = {char["cell"]: char["criminal"] for char in data["characters"]}
-        all_clues = [char["clue"] for char in data["characters"]]
+        for p_path in puzzle_files:
+            with self.subTest(puzzle=p_path.name):
+                with open(p_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
 
-        # Tất cả các clue của p01.json phải đúng trên nghiệm thật
-        for i, clue in enumerate(all_clues):
-            self.assertTrue(
-                evaluate(clue, solution, n),
-                msg=f"Clue thứ {i} ({clue['type']}) sai trên nghiệm của p01.json!",
-            )
+                n = data["n"]
+                solution = {char["cell"]: char["criminal"] for char in data["characters"]}
+                all_clues = [char["clue"] for char in data["characters"]]
 
-        # evaluate_all cũng phải trả về True
-        self.assertTrue(evaluate_all(all_clues, solution, n))
+                # Tất cả các clue của puzzle phải đúng trên nghiệm thật
+                for i, clue in enumerate(all_clues):
+                    self.assertTrue(
+                        evaluate(clue, solution, n),
+                        msg=f"Clue {i} ({clue['type']}) sai trên nghiệm của {p_path.name}!",
+                    )
+
+                # evaluate_all cũng phải trả về True
+                self.assertTrue(evaluate_all(all_clues, solution, n))
 
 
 if __name__ == "__main__":
