@@ -1,66 +1,164 @@
-"""Game Engine: giữ lời giải ẩn + clue chưa lật; chỉ phát PublicKB cho Agent. (Scope A)
+"""GameEngine: nạp puzzle, giữ nhãn ẩn + clue chưa lật, restart. (Scope A)
 
-Quan hệ một chiều:   GameEngine  --PublicKB-->  Logic Agent
-Agent KHÔNG được nhận GameEngine, chỉ nhận PublicKB.
-
-TODO(Scope A):
-  - load_puzzle(path): đọc JSON (docs/INTERFACES.md), validate clue, tạo Character
-  - restart()
-  - get_public_kb() -> PublicKB  (chỉ clue đã lật + verdict đã chứng minh)
-  - submit_verdict(cell, verdict, classify_fn) -> kết quả (xem docstring)
-  - is_solved(), unsolved_cells()
-  - kiểm tra nội bộ: verdict được agent chứng minh PHẢI khớp nhãn ẩn (assert, để bắt bug)
+Ranh giới Engine / Agent (docs/INTERFACES.md, mục 3): Agent chỉ thấy `PublicKB`.
+Nhãn Criminal/Innocent và clue của thẻ chưa lật chỉ nằm trong `GameEngine`.
 """
+import json
+from copy import deepcopy
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List
+from os import PathLike
+from pathlib import Path
+from typing import Any, Dict, List, Set, Tuple, Union
 
+from engine import board
+from engine.character import Character, parse_character
 from engine.clue import Clue
+from engine.constants import (  
+    ACCEPTED,
+    CONTRADICTED,
+    CRIMINAL,
+    INCONSISTENT,
+    INNOCENT,
+    NOT_PROVABLE,
+    UNKNOWN,
+)
 
-CRIMINAL, INNOCENT = "CRIMINAL", "INNOCENT"
-UNKNOWN, INCONSISTENT = "UNKNOWN", "INCONSISTENT"
-ACCEPTED, NOT_PROVABLE, CONTRADICTED = "ACCEPTED", "NOT_PROVABLE", "CONTRADICTED"
+PuzzleSource = Union[str, "PathLike[str]", Dict[str, Any]]
 
 
-@dataclass
+@dataclass(frozen=True)
 class PublicKB:
-    """Thứ DUY NHẤT agent được nhìn thấy."""
+    """Phần Agent được phép thấy: các clue đã lật và trạng thái đã chứng minh."""
+
     n: int
-    revealed_clues: List[Clue] = field(default_factory=list)
-    proved: Dict[str, str] = field(default_factory=dict)   # cell -> CRIMINAL/INNOCENT
-    # Các ô face-up ban đầu cũng nằm trong proved + revealed_clues.
+    revealed_clues: Tuple[Clue, ...] = ()
+    proved: Dict[str, str] = field(default_factory=dict)  # cell -> CRIMINAL | INNOCENT
 
 
 class GameEngine:
-    def __init__(self):
-        self.n = 0
-        self._solution = {}     # PRIVATE: cell -> bool
-        self._clues = {}        # PRIVATE: cell -> Clue (kể cả chưa lật)
-        self.characters = {}    # cell -> Character
-        self.revealed = []      # thứ tự lật (để hiển thị)
+    """Trạng thái một ván chơi. Gọi `load_puzzle` trước khi dùng các hàm khác."""
 
-    def load_puzzle(self, path: str) -> None:
-        raise NotImplementedError
+    def __init__(self) -> None:
+        self._n = 0
+        self._characters: Tuple[Character, ...] = ()
+        self._labels: Dict[str, str] = {}      # BÍ MẬT: cell -> CRIMINAL | INNOCENT
+        self._clues: Dict[str, Clue] = {}      # BÍ MẬT cho tới khi thẻ được lật
+        self._initial_revealed: Tuple[str, ...] = ()
+        self._revealed: Set[str] = set()
+        self._loaded = False
+
+    # ------------------------------------------------------------------ nạp puzzle
+    def load_puzzle(self, source: PuzzleSource) -> None:
+        """Nạp puzzle từ đường dẫn file JSON hoặc dict đã parse, rồi đặt về trạng thái ban đầu.
+
+        Nếu puzzle sai thì ném ValueError và giữ nguyên ván hiện tại (không nạp dở).
+
+        Raises:
+            ValueError: JSON hỏng hoặc puzzle vi phạm quy tắc ở INTERFACES.md mục 2.4.
+            FileNotFoundError: đường dẫn không tồn tại.
+        """
+        data = self._read_source(source)
+        n, characters, labels, clues, initial = self._parse_puzzle(data)
+
+        self._n = n
+        self._characters = characters
+        self._labels = labels
+        self._clues = clues
+        self._initial_revealed = initial
+        self._loaded = True
+        self.restart()
 
     def restart(self) -> None:
-        raise NotImplementedError
+        """Trả ván về trạng thái ban đầu: chỉ các thẻ `initially_revealed` được lật."""
+        self._require_loaded()
+        self._revealed = set(self._initial_revealed)
+
+    # ------------------------------------------------------------------ truy vấn công khai
+    @property
+    def n(self) -> int:
+        self._require_loaded()
+        return self._n
+
+    @property
+    def characters(self) -> Tuple[Character, ...]:
+        """Thông tin công khai (ô, tên, nghề) của mọi nhân vật, thứ tự row-major."""
+        self._require_loaded()
+        return self._characters
+
+    @property
+    def revealed_cells(self) -> List[str]:
+        """Các ô đã lật, thứ tự row-major."""
+        self._require_loaded()
+        return sorted(self._revealed, key=lambda c: board.cell_index(c, self._n))
+
+    def is_revealed(self, cell: str) -> bool:
+        self._require_loaded()
+        return cell in self._revealed
 
     def get_public_kb(self) -> PublicKB:
-        raise NotImplementedError
+        """PublicKB hiện tại: clue của thẻ đã lật + trạng thái thật của thẻ đã lật.
 
-    def submit_verdict(self, cell: str, verdict: str,
-                       classify_fn: Callable[[PublicKB, str], str]) -> str:
-        """Người chơi/Agent đề xuất verdict cho cell.
-
-        status = classify_fn(public_kb, cell)  # CRIMINAL / INNOCENT / UNKNOWN (từ Logic Agent)
-        - status == verdict            -> ACCEPTED: đánh dấu, lật thẻ, lộ clue của cell
-        - status == UNKNOWN            -> NOT_PROVABLE, không đổi state
-        - status là verdict ngược lại  -> CONTRADICTED, không đổi state
-        Trả về một trong ACCEPTED / NOT_PROVABLE / CONTRADICTED.
+        Thẻ face-up ban đầu công khai cả trạng thái lẫn clue (INTERFACES.md, mục 2.3).
         """
-        raise NotImplementedError
+        cells = self.revealed_cells
+        return PublicKB(
+            n=self._n,
+            revealed_clues=tuple(self._clues[c] for c in cells),
+            proved={c: self._labels[c] for c in cells},
+        )
 
-    def unsolved_cells(self):
-        raise NotImplementedError
+    # ------------------------------------------------------------------ nội bộ
+    def _require_loaded(self) -> None:
+        if not self._loaded:
+            raise RuntimeError("Chưa nạp puzzle: gọi load_puzzle() trước")
 
-    def is_solved(self) -> bool:
-        raise NotImplementedError
+    @staticmethod
+    def _read_source(source: PuzzleSource) -> Dict[str, Any]:
+        if isinstance(source, dict):
+            return deepcopy(source)
+        path = Path(source)
+        try:
+            with path.open(encoding="utf-8") as fh:
+                data = json.load(fh)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{path}: JSON không hợp lệ: {exc}") from exc
+        if not isinstance(data, dict):
+            raise ValueError(f"{path}: gốc của file puzzle phải là object JSON")
+        return data
+
+    @staticmethod
+    def _parse_puzzle(data: Dict[str, Any]):
+        """Parse + kiểm tra toàn bộ puzzle, chưa đụng tới state của engine."""
+        n = data.get("n")
+        if isinstance(n, bool) or not isinstance(n, int) or n < 1:
+            raise ValueError(f"'n' phải là số nguyên dương, nhận {n!r}")
+
+        raw = data.get("characters")
+        if not isinstance(raw, list) or len(raw) != n * n:
+            got = len(raw) if isinstance(raw, list) else raw
+            raise ValueError(f"'characters' phải là list đúng {n * n} phần tử, nhận {got!r}")
+
+        parsed = [parse_character(item, n) for item in raw]
+        cells = [ch.cell for ch, _, _ in parsed]
+        if len(set(cells)) != len(cells):
+            raise ValueError(f"'characters' có ô trùng: {sorted(c for c in set(cells) if cells.count(c) > 1)}")
+        parsed.sort(key=lambda item: board.cell_index(item[0].cell, n))
+
+        names = [ch.name.casefold() for ch, _, _ in parsed]
+        if any(a >= b for a, b in zip(names, names[1:])):
+            raise ValueError("tên character phải tăng dần theo alphabet theo thứ tự row-major")
+
+        initial = data.get("initially_revealed")
+        if not isinstance(initial, list) or not initial:
+            raise ValueError("'initially_revealed' phải là list không rỗng")
+        for cell in initial:
+            if not isinstance(cell, str) or not board.is_valid_cell(cell, n):
+                raise ValueError(f"'initially_revealed': ô {cell!r} không hợp lệ hoặc ngoài lưới")
+        if len(set(initial)) != len(initial):
+            raise ValueError(f"'initially_revealed' có ô trùng: {initial!r}")
+
+        characters = tuple(ch for ch, _, _ in parsed)
+        labels = {ch.cell: (CRIMINAL if crim else INNOCENT) for ch, crim, _ in parsed}
+        clues = {ch.cell: clue for ch, _, clue in parsed}
+        initial_sorted = tuple(sorted(initial, key=lambda c: board.cell_index(c, n)))
+        return n, characters, labels, clues, initial_sorted
