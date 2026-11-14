@@ -13,9 +13,15 @@ from typing import Any, Dict, List, Set, Tuple, Union
 from engine import board
 from engine.character import Character, parse_character
 from engine.clue import Clue
-
-CRIMINAL = "CRIMINAL"
-INNOCENT = "INNOCENT"
+from engine.constants import ( 
+    ACCEPTED,
+    CONTRADICTED,
+    CRIMINAL,
+    INCONSISTENT,
+    INNOCENT,
+    NOT_PROVABLE,
+    UNKNOWN,
+)
 
 PuzzleSource = Union[str, "PathLike[str]", Dict[str, Any]]
 
@@ -41,7 +47,6 @@ class GameEngine:
         self._revealed: Set[str] = set()
         self._loaded = False
 
-    # ------------------------------------------------------------------ nạp puzzle
     def load_puzzle(self, source: PuzzleSource) -> None:
         """Nạp puzzle từ đường dẫn file JSON hoặc dict đã parse, rồi đặt về trạng thái ban đầu.
 
@@ -67,7 +72,6 @@ class GameEngine:
         self._require_loaded()
         self._revealed = set(self._initial_revealed)
 
-    # ------------------------------------------------------------------ truy vấn công khai
     @property
     def n(self) -> int:
         self._require_loaded()
@@ -101,7 +105,6 @@ class GameEngine:
             proved={c: self._labels[c] for c in cells},
         )
 
-    # ------------------------------------------------------------------ nội bộ
     def _require_loaded(self) -> None:
         if not self._loaded:
             raise RuntimeError("Chưa nạp puzzle: gọi load_puzzle() trước")
