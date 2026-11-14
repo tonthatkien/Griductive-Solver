@@ -9,6 +9,7 @@ from engine.clue import (
     COMPARE_OPS,
     DEFAULT_STATUS,
     PARITIES,
+    _check_region,
 )
 from engine.constants import CRIMINAL, STATUSES
 
@@ -61,6 +62,9 @@ def _extract_clue_data(clue: Any) -> Tuple[str, Dict[str, Any]]:
 def resolve_region_cells(region: Dict[str, Any], n: int) -> List[str]:
     """Phân giải đặc tả region thành danh sách cell ID duy nhất theo thứ tự row-major.
 
+    Tái sử dụng logic kiểm tra và phân giải vùng từ engine.clue._check_region để đảm bảo
+    đồng nhất 100% với game engine và loại bỏ mã trùng lặp.
+
     Args:
         region: Dict mô tả vùng.
         n: Kích thước lưới n x n.
@@ -71,59 +75,7 @@ def resolve_region_cells(region: Dict[str, Any], n: int) -> List[str]:
     Raises:
         ValueError: Nếu region sai cấu trúc, có ô trùng lặp, ô ngoài lưới, hoặc rỗng.
     """
-    if not isinstance(region, dict) or "type" not in region:
-        raise ValueError(f"Đặc tả region không hợp lệ: {region!r}")
-
-    rtype = region["type"]
-    if rtype == "row":
-        num = region.get("number")
-        if num is None:
-            raise ValueError(f"Region 'row' cần trường 'number': {region}")
-        if isinstance(num, bool) or not isinstance(num, int):
-            raise ValueError(
-                f"Số hàng (row number) phải là số nguyên (int), nhận được: {num!r} "
-                f"({type(num).__name__})"
-            )
-        if not (1 <= num <= n):
-            raise ValueError(f"Số hàng {num} nằm ngoài phạm vi lưới [1, {n}]")
-        cells = board.row_cells(n, num)
-    elif rtype == "col":
-        letter = region.get("letter")
-        if letter is None:
-            raise ValueError(f"Region 'col' cần trường 'letter': {region}")
-        if not isinstance(letter, str) or len(letter) != 1 or not letter.isupper():
-            raise ValueError(
-                f"Ký tự cột (col letter) phải là chữ cái in hoa 1 ký tự, nhận được: {letter!r}"
-            )
-        if letter not in board.COLS[:n]:
-            raise ValueError(f"Cột {letter!r} nằm ngoài phạm vi lưới {n}x{n}")
-        cells = board.col_cells(n, letter)
-    elif rtype == "neighbors":
-        cell = region.get("cell")
-        if cell is None:
-            raise ValueError(f"Region 'neighbors' cần trường 'cell': {region}")
-        if not isinstance(cell, str) or not board.is_valid_cell(cell, n):
-            raise ValueError(f"Ô tâm {cell!r} trong neighbors không hợp lệ cho lưới {n}x{n}")
-        cells = board.neighbor_cells(n, cell)
-    elif rtype == "list":
-        raw_cells = region.get("cells")
-        if raw_cells is None:
-            raise ValueError(f"Region 'list' thiếu danh sách 'cells': {region}")
-        if not isinstance(raw_cells, list):
-            raise ValueError(f"Trường 'cells' phải là list, nhận được: {raw_cells!r}")
-        for c in raw_cells:
-            if not isinstance(c, str) or not board.is_valid_cell(c, n):
-                raise ValueError(f"Cell {c!r} trong region không hợp lệ cho lưới {n}x{n}")
-        if len(raw_cells) != len(set(raw_cells)):
-            raise ValueError(f"Các ô trong region 'list' không được trùng nhau: {raw_cells}")
-        # Sắp xếp danh sách ô theo row-major dựa trên board.cell_index (O(1))
-        cells = sorted(raw_cells, key=lambda c: board.cell_index(c, n))
-    else:
-        raise ValueError(f"Loại region không hợp lệ: {rtype!r}")
-
-    if not cells:
-        raise ValueError(f"Vùng không được rỗng (0 ô hợp lệ): {region!r}")
-    return cells
+    return _check_region(region, n, "region")
 
 
 def _validate_k(k: Any, num_cells: int) -> int:
