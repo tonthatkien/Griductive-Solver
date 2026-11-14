@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Set, Tuple, Union
 from engine import board
 from engine.character import Character, parse_character
 from engine.clue import Clue
-from engine.constants import (  
+from engine.constants import (  # noqa: F401  (re-export: giữ import từ engine.game_state)
     ACCEPTED,
     CONTRADICTED,
     CRIMINAL,
@@ -28,7 +28,15 @@ PuzzleSource = Union[str, "PathLike[str]", Dict[str, Any]]
 
 @dataclass(frozen=True)
 class PublicKB:
-    """Phần Agent được phép thấy: các clue đã lật và trạng thái đã chứng minh."""
+    """Phần DUY NHẤT Agent được thấy (ranh giới Engine / Agent, INTERFACES.md mục 3).
+
+    Gồm đúng ba thứ: kích thước lưới, các clue đã lật, và verdict đã chứng minh của các thẻ
+    đã lật. Không chứa nhãn ẩn của thẻ chưa lật, không chứa clue chưa lật, không giữ tham
+    chiếu tới `GameEngine`. Agent nhận `PublicKB`, KHÔNG nhận `GameEngine`.
+
+    Mỗi lần `GameEngine.get_public_kb()` trả một bản sao độc lập: sửa `proved` hay `params`
+    của clue trong bản này không ảnh hưởng ván chơi.
+    """
 
     n: int
     revealed_clues: Tuple[Clue, ...] = ()
@@ -96,14 +104,20 @@ class GameEngine:
         return cell in self._revealed
 
     def get_public_kb(self) -> PublicKB:
-        """PublicKB hiện tại: clue của thẻ đã lật + trạng thái thật của thẻ đã lật.
+        """PublicKB hiện tại: clue + verdict đã chứng minh của các thẻ đã lật (row-major).
 
         Thẻ face-up ban đầu công khai cả trạng thái lẫn clue (INTERFACES.md, mục 2.3).
+        Trả bản sao sâu của clue và dict mới, nên Agent không thể sửa trạng thái engine
+        qua kết quả này. Thẻ chưa lật không xuất hiện ở bất kỳ trường nào.
+
+        Raises:
+            RuntimeError: chưa gọi `load_puzzle`.
         """
+        self._require_loaded()
         cells = self.revealed_cells
         return PublicKB(
             n=self._n,
-            revealed_clues=tuple(self._clues[c] for c in cells),
+            revealed_clues=tuple(deepcopy(self._clues[c]) for c in cells),
             proved={c: self._labels[c] for c in cells},
         )
 
