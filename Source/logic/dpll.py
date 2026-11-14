@@ -13,7 +13,7 @@ class SolverStats:
     Thuộc tính:
         decisions: Số lần chọn biến để rẽ nhánh.
         propagations: Số literal được suy ra từ các unit clause.
-        backtracks: Số lần quay lui sau khi một nhánh dẫn tới mâu thuẫn .
+        backtracks: Số lần quay lui sau khi một nhánh dẫn tới mâu thuẫn.
         runtime: Tổng thời gian thực thi của thuật toán tính bằng giây (time.perf_counter).
     """
 
@@ -111,7 +111,7 @@ class DPLLSolver:
         assignment: Dict[int, bool],
         deadline: Optional[float] = None,
     ) -> bool:
-        """Kiểm tra xem mệnh đề đã được thỏa mãn bởi phép gán hay chưa."""
+        """Kiểm tra mệnh đề đã thỏa mãn dưới phép gán hay chưa."""
         status, _ = self.get_clause_status(clause, assignment, deadline=deadline)
         return status == "SATISFIED"
 
@@ -121,7 +121,7 @@ class DPLLSolver:
         assignment: Dict[int, bool],
         deadline: Optional[float] = None,
     ) -> bool:
-        """Kiểm tra sự tồn tại của bất kỳ mệnh đề rỗng nào dưới phép gán hiện tại."""
+        """Kiểm tra xem tập mệnh đề có chứa mệnh đề xung đột dưới phép gán hiện tại không."""
         return any(
             self.get_clause_status(clause, assignment, deadline=deadline)[0] == "CONFLICT"
             for clause in clauses
@@ -223,9 +223,15 @@ class DPLLSolver:
         return clauses_list
 
     def _normalize_assumptions(
-        self, assumptions: Sequence[int], num_vars: int, deadline: Optional[float]
+        self,
+        assumptions: Optional[Sequence[int]],
+        num_vars: int,
+        deadline: Optional[float],
     ) -> List[int]:
         """Chuẩn hóa và xác thực danh sách assumptions có kiểm tra deadline định kỳ."""
+        if assumptions is None:
+            return []
+
         if isinstance(assumptions, (str, bytes)) or not hasattr(assumptions, "__iter__"):
             raise TypeError(
                 f"assumptions phải là danh sách các literal, nhận được: {assumptions!r}"
@@ -300,9 +306,8 @@ class DPLLSolver:
     ) -> Optional[int]:
         """Chọn biến phân nhánh theo quy tắc xác định (deterministic).
 
-        Tìm mệnh đề chưa được thỏa mãn có số biến chưa gán phân biệt ít nhất (độ dài
-        thực tế của mệnh đề sau khi loại trừ literal trùng lặp), và chọn biến có chỉ
-        số nhỏ nhất trong mệnh đề đó.
+        Tìm mệnh đề chưa được thỏa mãn có số biến chưa gán phân biệt ít nhất,
+        và chọn biến có chỉ số nhỏ nhất trong mệnh đề đó.
         Nếu nhiều mệnh đề cùng độ dài nhỏ nhất, chọn biến nhỏ nhất trong số các mệnh đề đó.
         Trả về None nếu tất cả mệnh đề đã thỏa mãn hoặc không còn biến chưa gán.
         """
@@ -405,10 +410,29 @@ class DPLLSolver:
         self,
         clauses: Sequence[Sequence[int]],
         num_vars: int,
-        assumptions: Sequence[int] = (),
+        assumptions: Optional[Sequence[int]] = (),
         timeout: Optional[float] = None,
     ) -> SolveResult:
-        """Giải bài toán SAT bằng DPLL hỗ trợ assumptions và thống kê."""
+        """Giải bài toán SAT bằng thuật toán DPLL có hỗ trợ assumptions.
+
+        Hàm tìm phép gán thỏa mãn cho tập mệnh đề CNF (clauses) kết hợp các
+        giả định ban đầu (assumptions) mà không sửa đổi danh sách clauses gốc.
+
+        Args:
+            clauses: Tập hợp các mệnh đề CNF. Không bị sửa đổi trong quá trình giải.
+            num_vars: Tổng số biến logic của bài toán (từ 1 đến num_vars).
+            assumptions: Danh sách các literal giả định cần cố định giá trị ban đầu.
+                Mặc định là rỗng (hoặc None). Không chèn vào clauses của KB gốc.
+            timeout: Thời gian chạy tối đa tính bằng giây. None nghĩa là không giới hạn.
+
+        Returns:
+            SolveResult gồm:
+            - sat: True nếu công thức thỏa mãn, False nếu mâu thuẫn (UNSAT) hoặc timeout.
+            - model: Bảng gán đầy đủ {var: bool} cho mọi biến từ 1 đến num_vars nếu SAT;
+                None nếu UNSAT hoặc timeout.
+            - stats: Thống kê decisions, propagations, backtracks, runtime.
+            - timed_out: True nếu dừng do vượt quá thời gian, ngược lại False.
+        """
         start_time = time.perf_counter()
         self.stats = SolverStats()
 
@@ -421,6 +445,7 @@ class DPLLSolver:
             clauses_list = self._normalize_clauses(clauses, num_vars, deadline)
             assump_list = self._normalize_assumptions(assumptions, num_vars, deadline)
 
+            # Áp dụng assumptions vào bảng gán ban đầu thay vì chèn vào clauses gốc
             assignment: Dict[int, bool] = {}
             if not self._apply_assumptions(assump_list, assignment, deadline):
                 self.stats.runtime = time.perf_counter() - start_time
