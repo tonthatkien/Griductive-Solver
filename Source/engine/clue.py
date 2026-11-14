@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List
 
 from engine import board
+from engine.constants import CRIMINAL, STATUSES
 
 
 @dataclass(frozen=True)
@@ -40,12 +41,11 @@ class Clue:
 CORE_TYPES = ("FACT", "SAME_STATUS", "DIFFERENT_STATUS", "EXACTLY", "AT_LEAST", "AT_MOST")
 EXT_TYPES = ("PARITY", "COMPARE")
 
-# Không import từ game_state (game_state đã import clue -> vòng lặp import).
-FACT_STATUSES = ("CRIMINAL", "INNOCENT")
+# Hằng CRIMINAL/INNOCENT lấy từ engine.constants (không import từ game_state: game_state đã import clue).
 COUNT_TYPES = ("EXACTLY", "AT_LEAST", "AT_MOST")
 PAIR_TYPES = ("SAME_STATUS", "DIFFERENT_STATUS")
 PARITIES = ("EVEN", "ODD")
-DEFAULT_STATUS = "CRIMINAL"
+DEFAULT_STATUS = CRIMINAL
 COMPARE_OPS = ("GT", "GE", "EQ", "LE", "LT")
 
 
@@ -161,19 +161,21 @@ def _check_region(region: Any, n: int, what: str) -> List[str]:
 
 
 def _check_status(p: dict, what: str) -> None:
-    """status là tùy chọn (mặc định CRIMINAL); nếu có thì phải thuộc FACT_STATUSES."""
-    if "status" in p and p["status"] not in FACT_STATUSES:
-        raise ValueError(f"{what}: status {p['status']!r} phải thuộc {FACT_STATUSES}")
+    """status là tùy chọn (mặc định CRIMINAL); nếu có thì phải thuộc STATUSES."""
+    if "status" in p and p["status"] not in STATUSES:
+        raise ValueError(f"{what}: status {p['status']!r} phải thuộc {STATUSES}")
 
 
 def validate_clue(clue: Clue, n: int) -> None:
     """Raise ValueError nếu clue sai; hợp lệ thì trả về None. Kiểm tra:
        - owner và mọi ô nhắc tới nằm trong lưới (đúng dạng chuẩn, vd 'C2' chứ không 'c2')
-       - region đúng kiểu, không rỗng; 'cells' không có ô trùng
+       - region đúng kiểu, không rỗng; region 'list' không có ô trùng
        - 0 <= k <= |region| với EXACTLY/AT_LEAST/AT_MOST (k là int, không phải bool)
-       - SAME/DIFFERENT: hai ô khác nhau (clue về một ô với chính nó vô nghĩa)
-       - type, parity, op hợp lệ; status hợp lệ: FACT bắt buộc có, các clue đếm/PARITY/COMPARE
-         tùy chọn (mặc định CRIMINAL), SAME_STATUS/DIFFERENT_STATUS không dùng; thiếu tham số cũng báo ValueError (không KeyError)
+       - SAME_STATUS/DIFFERENT_STATUS: cell1 khác cell2 (clue về một ô với chính nó vô nghĩa)
+       - type, parity, op hợp lệ
+       - status: FACT bắt buộc có; EXACTLY/AT_LEAST/AT_MOST/PARITY/COMPARE tùy chọn (mặc định
+         CRIMINAL); SAME_STATUS/DIFFERENT_STATUS không dùng. Nếu có thì phải thuộc STATUSES.
+       - thiếu tham số cũng báo ValueError (không KeyError)
     """
     t, p = clue.type, clue.params
     _check_cell(clue.owner, n, "owner")
