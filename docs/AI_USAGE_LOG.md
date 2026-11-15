@@ -43,33 +43,9 @@
 | 13/11/2026 | Hữu Duy | D6 | Gemini | Quy ước chẵn/lẻ cho trường hợp đếm bằng 0 và tập toán tử so sánh 2 vùng | "Trong bài toán logic trên lưới, khi kiểm tra clue PARITY nếu số lượng phần tử khớp bằng 0 thì quy ước toán học chuẩn là chẵn hay lẻ? Với clue COMPARE giữa 2 vùng, nên chuẩn hóa các toán tử so sánh (GT, GE, EQ, LE, LT) thế nào để tránh sót nhánh?" | Cách lập luận logic toán học. Viết code eval_parity, eval_compare trong Source/logic/semantic.py và viết bổ sung test cho đủ 5 toán tử so sánh | Chạy test suite `test_semantic.py` xanh; kiểm tra thực tế bằng cách đánh giá toàn bộ clue của puzzle thật data/puzzles_3x3/p01.json trên lời giải nghiệm đúng |
 | 13/11/2026 | Hữu Duy | D5, D6 | Gemini | Rà soát tính độc lập của module logic và kiểm tra tuân thủ coding standards | "Kiểm tra xem module semantic evaluator có đang vô tình phụ thuộc hoặc import chéo module nào từ cnf_encoder không để đảm bảo làm oracle kiểm chứng độc lập; kiểm tra định dạng PEP 8 và độ dài dòng" | Tham khảo góp ý rà soát kiến trúc: xác nhận không import cnf_encoder | Kiểm tra danh sách import đầu file semantic.py; chạy unittest toàn bộ dự án bảo đảm không phát sinh lỗi hồi quy |
 | 14/11/2026 | Tôn Thất Kiên | A4 | Claude (Anthropic) | Cứng hóa `PublicKB` / `get_public_kb` và viết test không rò thông tin ở ranh giới Engine/Agent | "Hướng dẫn tôi làm tiếp A4 (PublicKB & get_public_kb) từ game_state.py hiện có: chỉ gồm n, clue đã lật, verdict đã chứng minh; Agent không nhận GameEngine; kiểm tra không rò nhãn ẩn và clue chưa lật; soạn commit và PR" | Lấy: `get_public_kb()` trả bản sao sâu của clue và dict `proved` mới mỗi lần gọi (trước đó trả object `Clue` của engine, Agent sửa `params` được là đổi được clue trong engine); docstring `PublicKB` nêu rõ ranh giới; `# noqa: F401` cho dòng re-export hằng số; `tests/test_public_kb.py`; nội dung commit và PR. Phần nhóm tự quyết: dùng `deepcopy` mỗi lần gọi (có cache hay không), giữ `proved` là `dict` thường thay vì `MappingProxyType`, và việc ghi `UNKNOWN`/`INCONSISTENT`/`ACCEPTED`... vào `constants.py` | Chạy `python -m unittest discover -s tests -t .` với `board.py` thật: toàn bộ test xanh; kiểm tra thủ công rằng sửa `proved` hoặc `params` của KB không đổi engine, ô chưa lật không xuất hiện trong `proved`/`owner`/`id` của clue, KB không giữ tham chiếu tới `GameEngine`, snapshot cũ không đổi sau khi lật thẻ hoặc `restart`. Chưa kiểm: hành vi khi `submit_verdict` (A5) lật thẻ thật, test hiện giả lập bằng `engine._revealed` |
-
-
-# AI Usage Log – Gia Hân
-
-
-## Thông tin công việc
-
-- Project: Griductive solver
-- Task ID: B2
-- Tên công việc: Implement brute-force checker for 3x3 and 4x4 puzzles
-- Ngày hoàn thành: 15/11/2026
-
-## Nhật ký sử dụng AI
-
-| Ngày | Người | ID việc | Công cụ | Mục đích | Prompt thực tế | Kết quả sử dụng | Kiểm chứng thực tế |
-|---|---|---|---|---|---|---|---|
 | 14/11/2026 | Gia Hân | B2 | ChatGPT | Tìm hiểu yêu cầu của B2 và nắm vững kiến thức cần thiết trước khi lập trình. | Đóng vai giảng viên Cơ sở Trí tuệ nhân tạo và chuyên gia thuật toán Python. Dựa trên tài liệu AI - Project 2.pdf, TODOLIST(2).xlsx và repository Griductive-Solver, hãy phân tích đầy đủ nhiệm vụ B2. Giải thích mục tiêu, đầu vào, đầu ra, yêu cầu chức năng, dependency D5 và tiêu chí nghiệm thu. Giảng các kiến thức cần thiết gồm logic mệnh đề, Boolean assignment, SAT, UNSAT, Semantic evaluator và Brute-force. Sử dụng ví dụ đơn giản, giải thích từng thuật ngữ và đặt câu hỏi kiểm tra kiến thức sau mỗi phần. | Có bản phân tích nhiệm vụ, danh sách kiến thức cần học và hiểu vai trò của Brute-force checker trong đồ án. | Đã đối chiếu từng yêu cầu với bảng phân công và đề bài; giải thích được SAT, UNSAT, assignment và vì sao B2 không cần DPLL |
 | 14/11/2026 | Gia Hân | B2 | ChatGPT | Hiểu nguyên lý hoạt động của thuật toán trước khi triển khai | Hãy hướng dẫn chi tiết thuật toán Brute-force để tìm tất cả nghiệm của bài toán Griductive Solver. | Nắm được quy trình sinh assignment, lọc nghiệm và đếm nghiệm; có pseudocode tham khảo. | Đã tự lập bảng chân trị cho ví dụ nhỏ, kiểm tra từng clue bằng tay, đối chiếu kết quả với lời giải. |
 | 14/11/2026 | Gia Hân | B2 | ChatGPT | Xây dựng phương án triển khai rõ ràng, hạn chế lỗi logic và tránh viết code thiếu cấu trúc. | Xác định input, output, các hàm cần triển khai, trách nhiệm của từng hàm và luồng dữ liệu. Trình bày pseudocode cho việc duyệt assignment, gọi Semantic evaluator, lọc assignment hợp lệ, đếm số nghiệm và phân loại puzzle. Phân biệt đếm chính xác toàn bộ nghiệm với kiểm tra nghiệm duy nhất bằng cách dừng khi phát hiện nghiệm thứ hai. | Có bản thiết kế chương trình, danh sách hàm, pseudocode và kế hoạch triển khai. | Tự vẽ sơ đồ thuật toán, kiểm tra mỗi hàm có nhiệm vụ riêng, thử mô phỏng từng bước với assignment đơn giản và đối chiếu với yêu cầu trong tài liệu. Xác nhận không phụ thuộc DPLL. |
 | 15/11/2026 | Gia Hân | B2 | ChatGPT | Học cách triển khai thuật toán thành mã Python và hoàn thành chức năng chính của B2. | Hãy hướng dẫn tôi tự xây dựng tools/brute_force.py theo từng bước nhỏ. Bắt đầu với hàm sinh Boolean assignment, sau đó xây dựng ánh xạ cell, kiểm tra clue bằng Semantic evaluator, lọc nghiệm, đếm nghiệm và xuất kết quả. Với mỗi hàm, hãy giải thích mục đích, tham số, giá trị trả về, thuật toán và từng dòng code khi tôi yêu cầu. Ưu tiên cung cấp gợi ý để tôi tự viết trước, sau đó nhận xét và sửa lỗi. Hướng dẫn tạo ví dụ và chạy thử sau mỗi phần. | Có mã nguồn Brute-force checker do bản thân triển khai, hiểu chức năng của từng hàm và cách chương trình hoạt động. | Tự đọc, giải thích lại từng hàm; chạy chương trình với các input đơn giản; đối chiếu kết quả với phép tính thủ công. Kiểm tra số assignment sinh ra, nghiệm thỏa mãn clue và kết quả đếm nghiệm. |
 | 15/11/2026 | Gia Hân | B2 | ChatGPT | Hiểu và sử dụng chính xác Semantic evaluator để lọc các assignment hợp lệ. | Hãy hướng dẫn tôi sử dụng logic.semantic.evaluate(clue, assignment, n) trong B2. | Nắm được cách đánh giá các loại clue, cách kết nối B2 với D5/D6 và cách xử lý dữ liệu theo quy ước của nhóm. | Tự tạo các assignment và clue có đáp án biết trước, tính kết quả bằng tay rồi so sánh với evaluate(). Kiểm tra trường hợp biên. Xác nhận tất cả loại clue thực tế trong puzzle được xử lý đúng. |
 
-## Xác nhận trước khi đăng
-
-- [ ] Tôi đã kiểm tra độ chính xác của thông tin.
-- [ ] Nội dung phản ánh đúng quá trình sử dụng AI.
-- [ ] Prompt được ghi đúng theo lịch sử thực tế.
-- [ ] Kết quả kiểm chứng có bằng chứng nếu cần.
-- [ ] Tôi đã đọc và hoàn thiện toàn bộ nhật ký.
-- [ ] Tôi cho phép đưa nhật ký lên GitHub.
