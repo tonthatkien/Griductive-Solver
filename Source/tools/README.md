@@ -1,120 +1,88 @@
-# B2 brute-force checker
+# Brute-force checker B2
 
-Offline reference checker for 3×3 and 4×4 boards, owned by Gia Hân with assigned
-reviewer Kiên (`tonthatkien`). Uses `logic.semantic.evaluate(Clue, assignment, n)`;
-does not import DPLL or the CNF encoder. No extra Python dependencies.
+Công cụ kiểm tra puzzle 3×3 và 4×4 bằng `logic.semantic.evaluate`, độc lập với DPLL
+và CNF encoder. Cần Python 3.10+; không cần thư viện bổ sung. Clue dùng schema và
+validator chung trong `engine.clue`.
 
-## Status and dependency
+## Cách chạy
 
-D5 and D6 were merged in [PR #10](https://github.com/tonthatkien/Griductive-Solver/pull/10),
-at main commit `9d65892e6aec5309d2cd175ecd8cc86e26e1e576`. B2 is tested with that
-real evaluator for all six core clues and both extensions. Integration tests are
-mandatory: missing or broken evaluator implementations now fail rather than skip.
-
-Clues use the actual `Clue`, `clue_from_dict`, shared `validate_clue` and clue-type
-constants from `engine.clue`. B2 validates puzzle shape and caller-supplied
-assignments; it no longer duplicates the shared region/clue schema validator.
-Character names must increase strictly by `casefold()` in row-major cell order,
-matching the current loader; duplicate names, including case variants, are rejected.
-
-## Usage
-
-Run in `Source/`, with Python 3.10+ (`python3` if `python` is unavailable):
+Chạy trong `Source/` (dùng `python3` nếu máy không có lệnh `python`):
 
 ```bash
 python -m tools.brute_force data/puzzles_3x3/p01.json
 python -m tools.brute_force data/puzzles_3x3/p01.json --stop-after-two
 python -m unittest -v tests.test_brute_force
 python -m unittest discover -s tests -t .
-python -m compileall tools tests
 ```
 
-The CLI prints JSON on success. Invalid input or an unavailable evaluator exits
-with code 2 and prints an error to stderr, with no fake UNSAT/uniqueness result.
+CLI in kết quả JSON. Mã thoát `0`: kiểm tra hoàn tất; `1`: tìm được nghiệm duy nhất
+nhưng nhãn lưu sẵn không khớp nghiệm; `2`: dữ liệu sai hoặc evaluator lỗi. Với mã
+`1`, JSON vẫn chứa nghiệm tìm được và `labels_match_solution=false`; không đổi
+kết luận về số nghiệm thành UNSAT. Mã `0` tự nó không khẳng định puzzle UNIQUE:
+cần đọc trường `status`.
+
+## API và phạm vi dữ liệu
 
 ```python
-from tools.brute_force import check_puzzle, count_solutions, iter_assignments
+from tools.brute_force import check_puzzle, check_public_kb, count_solutions
 
-result = check_puzzle(puzzle)  # JSON-format dictionary; full clue set
-# To check an explicitly chosen subset (including an empty set):
-public_result = count_solutions(revealed_clues, 3, known_statuses={"A1": False})
+full = check_puzzle(puzzle)  # dict đọc từ JSON; toàn bộ clue + trạng thái face-up ban đầu
+public = check_public_kb(engine.get_public_kb())  # chỉ clue đã lật + verdict đã chứng minh
+subset = count_solutions(clues, 3, known_statuses={"A1": False})
 ```
 
-`check_puzzle` checks all clues, including face-down clues, plus the statuses of
-`initially_revealed` cells. It is intended for complete-puzzle validation, not
-gameplay. Other stored `criminal` labels are checked only for Boolean schema
-validity; their values never constrain the search. Hidden-solution comparison is
-not performed. The input puzzle and clue dictionaries remain unchanged.
+`True` là Criminal, `False` là Innocent. `count_solutions` nhận các đối tượng `Clue`
+và tập public fact Boolean, cho phép tập clue rỗng. `check_public_kb` chuyển các
+verdict CRIMINAL/INNOCENT của `PublicKB` sang Boolean, từ chối verdict sai hoặc
+UNKNOWN/INCONSISTENT. Không nhận hoặc truy cập dữ liệu ẩn của engine.
 
-`count_solutions` accepts an iterable of `Clue` objects and a mapping of selected
-public Boolean facts. An empty clue set is valid here. `check_puzzle` requires
-exactly N² characters, one valid clue per character, distinct alphabetically ordered names
-in row-major cell order, and nonempty, distinct, valid initially revealed cells.
-Schema errors raise `ValueError`. Uniqueness is a check result, not an input
-precondition: inconsistent and ambiguous puzzles must be inspectable.
+`check_puzzle` dành cho kiểm tra toàn bộ puzzle, sử dụng cả clue của thẻ úp. Chỉ
+nhãn của các ô `initially_revealed` làm ràng buộc khi tìm nghiệm. Sau khi tìm xong,
+các nhãn lưu sẵn mới được so với nghiệm duy nhất để phát hiện lỗi dữ liệu; chúng
+không lọc assignment. Puzzle, clue và PublicKB đầu vào không bị thay đổi.
 
-## Result and stopping rules
+Puzzle phải có đúng N² character, một clue hợp lệ cho mỗi ô, các tên tăng nghiêm
+ngặt theo `casefold()` ở thứ tự row-major và danh sách face-up không rỗng/không
+trùng. Sai schema ném `ValueError`; UNSAT/MULTIPLE là kết quả kiểm tra hợp lệ.
 
-`CheckResult` includes `assignments_checked`, `satisfying_assignments`, `status`
-(`UNSAT`, `UNIQUE`, `MULTIPLE`), `unique_solution`, `exhaustive`, `runtime` in
-seconds, and the property `count_is_exact`. The CLI includes that property in JSON.
+## Kết quả và dừng sớm
 
-The default search considers all 512 or 65,536 assignments, including those
-rejected by public facts. Counts are exact. Optional `stop_after_two=True` stops
-at the second model: `satisfying_assignments=2` is a lower bound whenever
-`exhaustive=False`. A second model on the final assignment still gives an exact
-count. A single model is returned only after exhaustive search proves uniqueness.
-UNSAT also requires exhaustion. No arbitrary model is presented as a unique one.
+`CheckResult` có các trường:
 
-Evaluator exceptions propagate through the API. Non-Boolean evaluator results
-raise `TypeError`. Every clue is evaluated for each assignment compatible with
-public facts, even after a preceding clue returns false; unsupported clue errors
-cannot be hidden by short-circuiting. Generated assignments contain exactly N²
-Boolean values. `validate_assignment` checks external complete assignments.
+| Trường | Ý nghĩa |
+|---|---|
+| `assignments_checked` | Số assignment đã duyệt, gồm cả assignment bị public fact loại |
+| `satisfying_assignments` | Số nghiệm tìm được; là cận dưới khi chưa duyệt hết |
+| `status` | UNSAT, UNIQUE hoặc MULTIPLE |
+| `unique_solution` | Nghiệm duy nhất sau duyệt hết, hoặc `None` |
+| `exhaustive`, `count_is_exact` | Đã duyệt hết không gian và có số đếm chính xác |
+| `classifications` | CRIMINAL/INNOCENT/UNKNOWN cho từng ô qua tất cả nghiệm; UNSAT thì mọi ô INCONSISTENT; tìm kiếm chưa đầy đủ thì `None` |
+| `labels_match_solution` | So nhãn sau giải: True/False khi full puzzle có nghiệm duy nhất; trường hợp khác là `None` |
+| `runtime` | Thời gian chạy tính bằng giây |
 
-## Correctness and cost
+Mặc định duyệt đủ 512 hoặc 65.536 assignment. `stop_after_two=True` dừng khi gặp
+nghiệm thứ hai: đủ chứng minh MULTIPLE nhưng số nghiệm chỉ là cận dưới nếu
+`exhaustive=False`. Khi dừng ở assignment cuối thì số đếm và phân loại vẫn chính
+xác. UNIQUE và UNSAT luôn cần duyệt hết. Không suy ra ô forced từ một phần nghiệm.
 
-For v=N², `product((False, True), repeat=v)` enumerates each of the 2^v Boolean
-tuples exactly once. Zipping each tuple to `board.all_cells(n)` is a bijection to
-complete cell assignments. Every tuple is visited unless the caller explicitly
-requests stopping after the second model. A candidate is counted iff every
-selected public fact matches and every semantic evaluation is true. Therefore
-exhaustive counts establish UNSAT, uniqueness or multiplicity; finding two models
-alone already proves multiplicity. Neither hidden labels nor another solver are
-used to exclude candidates.
+Trước khi duyệt, mỗi clue được evaluate riêng một lần trên assignment mẫu đầy đủ
+để lộ lỗi evaluator hoặc kết quả không phải Boolean. Các lượt này không được
+tính vào `assignments_checked`. Khi tìm nghiệm, dừng đánh giá assignment ngay khi
+một clue sai. Lỗi evaluator được truyền ra, không biến thành UNSAT.
 
-For m clues and semantic cost c per clue, time is O(2^v × (v + m×c)). Region-based
-evaluation may itself cost O(v). Auxiliary space is O(v + total clue input size):
-the checker retains copied clues, public facts, one candidate and one first model,
-not all satisfying assignments. The test suite intentionally retains signatures
-to verify no duplicate enumeration; this is not production search memory usage.
-At 4×4 at most 65,536 assignments are checked; evaluator cost dominates. Use early
-stopping only when proof of multiplicity suffices. Exact counts and proofs of
-zero/one model require exhaustive enumeration. 5×5 is rejected (33,554,432
-assignments); DPLL stress testing belongs to later tasks.
+## Tính đúng đắn và độ phức tạp
 
-## Verification boundary
+Với v=N², Cartesian product của `(False, True)` lặp v lần sinh đúng 2^v tuple
+khác nhau. Ánh xạ theo `board.all_cells(n)` là song ánh với assignment đầy đủ.
+Một assignment được đếm khi và chỉ khi mọi public fact và mọi clue đều đúng.
+Hai nghiệm chứng minh MULTIPLE; duyệt hết mới chứng minh được UNIQUE hoặc UNSAT.
 
-Enumeration, search mechanics and error propagation tests use no evaluator or
-explicitly labelled test doubles. Separate mandatory real integration tests cover
-all eight clue types, both statuses, all region types, counting boundaries, parity
-at zero, comparison operators, overlapping regions, and all three solution classes
-on full 3×3/4×4 puzzle fixtures. They also exercise the actual CLI, immutability,
-hidden-label independence, and the current engine's public KB. No DPLL or encoder
-is used as the oracle: expected counts come from combinatorics and truth tables.
+Mỗi ô giữ hai bit ghi nhận đã xuất hiện False/True trong các nghiệm. Sau duyệt
+hết, một giá trị duy nhất cho biết trạng thái forced; có cả hai thì UNKNOWN.
+Không có model thì KB INCONSISTENT. Không lưu danh sách toàn bộ nghiệm.
 
-With the merged evaluator, `p01.json` has exactly **one** model after all **512**
-assignments are checked. Criminal cells are **A1, B2, C2, C3**; all others are
-Innocent. Its initial public KB alone admits **16** models. Flipping only face-down
-stored labels leaves the computed solution unchanged. These are real integration
-results, not mock outputs. The expected sample model was derived from the clues
-before being verified by the checker.
-
-Validation on this base: **47 B2 tests**, including **14 dedicated real integration
-tests**, pass without skips. Full repository tests and smoke results are recorded
-separately in the review report. The GUI entry point on this main base remains an
-unimplemented F1 stub, outside B2; checker CLI success does not certify the GUI.
-
-PR acceptance additionally requires review approval and CI.
-The AI usage log is awaiting the user's completion and authorization; it is not
-included in this change. No merge is authorized.
+Với m clue và chi phí c cho một lần evaluate, thời gian xấu nhất
+O(2^v × (v + m×c)), bộ nhớ O(v + kích thước clue). Dừng đánh giá một assignment
+không làm bỏ qua assignment khác. Chỉ dùng dừng sau hai nghiệm khi không cần số
+đếm hay phân loại đầy đủ. 5×5 bị từ chối vì có 33.554.432 assignment; dùng công cụ
+DPLL phù hợp cho ca stress.

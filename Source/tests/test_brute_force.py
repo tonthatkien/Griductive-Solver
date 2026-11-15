@@ -15,8 +15,8 @@ from unittest.mock import patch
 
 from engine import board
 from engine.clue import COUNT_TYPES, PAIR_TYPES, Clue, clue_from_dict
-from engine.constants import CRIMINAL, INNOCENT
-from engine.game_state import GameEngine
+from engine.constants import CRIMINAL, INCONSISTENT, INNOCENT, UNKNOWN
+from engine.game_state import GameEngine, PublicKB
 from logic import semantic
 from tools import brute_force as bf
 
@@ -185,6 +185,120 @@ class CountingWithDoubleTests(unittest.TestCase):
             bf.count_solutions([clue], 3, stop_after_two=True)
         self.assertEqual(evaluator.call_args.args[0].params["status"], CRIMINAL)
         self.assertEqual(clue.params, before)
+
+
+class ReviewRegressionTests(unittest.TestCase):
+    """Guard the reviewer-requested performance, reporting and public-KB behavior."""
+
+    def test_preflight_checks_all_clues_then_search_short_circuits(self) -> None:
+        clues = [make_clue(target=cell, status=CRIMINAL) for cell in ("A1", "B1")]
+        calls = {"A1": 0, "B1": 0}
+
+        def predicate(clue: Clue, assignment: dict[str, bool], n: int) -> bool:
+            calls[clue.params["target"]] += 1
+            return clue.params["target"] != "A1"
+
+        with patch.object(bf, "evaluate", side_effect=predicate):
+            result = bf.count_solutions(clues, 3)
+        self.assertEqual(calls, {"A1": 513, "B1": 1})
+        self.assertEqual(result.assignments_checked, 512)
+        self.assertEqual(result.status, bf.UNSAT)
+
+    def test_preflight_checks_boolean_return_for_later_clue(self) -> None:
+        clues = [make_clue(target=cell, status=CRIMINAL) for cell in ("A1", "B1")]
+        with patch.object(bf, "evaluate", side_effect=[False, 0]):
+            with self.assertRaises(TypeError):
+                bf.count_solutions(clues, 3)
+
+    def test_pair_clues_ignore_unused_status_like_loader(self) -> None:
+        for kind in PAIR_TYPES:
+            with self.subTest(kind=kind):
+                puzzle = make_puzzle()
+                puzzle["characters"][1]["clue"] = {
+                    "type": kind, "cell1": "A1", "cell2": "B1", "status": "unused",
+                }
+                GameEngine().load_puzzle(puzzle)
+                self.assertEqual(bf.check_puzzle(puzzle).satisfying_assignments, 128)
+
+    def test_invalid_clue_reports_character_cell(self) -> None:
+        puzzle = make_puzzle()
+        puzzle["characters"][1]["clue"]["target"] = "Z9"
+        with self.assertRaisesRegex(ValueError, "character B1: invalid clue"):
+            bf.check_puzzle(puzzle)
+
+    def test_exhaustive_classifications_include_forced_and_unknown(self) -> None:
+        result = bf.count_solutions([], 3, known_statuses={"A1": True, "B1": False})
+        expected = {cell: UNKNOWN for cell in board.all_cells(3)}
+        expected.update(A1=CRIMINAL, B1=INNOCENT)
+        self.assertEqual(result.classifications, expected)
+        self.assertIsNone(result.labels_match_solution)
+
+    def test_unique_classifications_match_model(self) -> None:
+        assignment = {cell: index % 2 == 0 for index, cell in enumerate(board.all_cells(3))}
+        result = bf.count_solutions([], 3, known_statuses=assignment)
+        self.assertEqual(result.status, bf.UNIQUE)
+        self.assertEqual(result.classifications,
+                         {c: CRIMINAL if v else INNOCENT for c, v in assignment.items()})
+        self.assertIsNone(result.labels_match_solution)
+
+    def test_unsat_classifications_are_inconsistent(self) -> None:
+        clues = [make_clue(target="A1", status=status) for status in (CRIMINAL, INNOCENT)]
+        result = bf.count_solutions(clues, 3)
+        self.assertEqual(result.classifications, dict.fromkeys(board.all_cells(3), INCONSISTENT))
+
+    def test_partial_search_does_not_claim_forced_statuses(self) -> None:
+        result = bf.count_solutions([], 3, stop_after_two=True)
+        self.assertFalse(result.exhaustive)
+        # Both first models have A1=False; later models disprove that apparent forced status.
+        self.assertIsNone(result.classifications)
+
+    def test_early_stop_at_last_assignment_still_has_exact_classifications(self) -> None:
+        known = dict.fromkeys(board.all_cells(3)[:-1], True)
+        result = bf.count_solutions([], 3, known_statuses=known, stop_after_two=True)
+        self.assertTrue(result.exhaustive)
+        self.assertEqual(result.classifications, {**dict.fromkeys(known, CRIMINAL), "C3": UNKNOWN})
+
+    def test_nonunique_puzzle_does_not_claim_labels_match(self) -> None:
+        puzzle = make_puzzle()
+        self.assertIsNone(bf.check_puzzle(puzzle).labels_match_solution)
+        puzzle["characters"][-1]["clue"]["status"] = CRIMINAL
+        self.assertIsNone(bf.check_puzzle(puzzle).labels_match_solution)
+
+    def test_public_helper_rejects_invalid_proved_verdicts(self) -> None:
+        for status in (UNKNOWN, INCONSISTENT, True, None, "invalid"):
+            with self.subTest(status=status), self.assertRaises(ValueError):
+                bf.check_public_kb(PublicKB(3, proved={"A1": status}))
+        for invalid in (None, {}, PublicKB(3, proved=[])):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                bf.check_public_kb(invalid)
+
+    def test_public_helper_passes_early_stop_and_preserves_snapshot(self) -> None:
+        kb = PublicKB(3, proved={"B2": CRIMINAL})
+        before = deepcopy(kb)
+        result = bf.check_public_kb(kb, stop_after_two=True)
+        self.assertFalse(result.exhaustive)
+        self.assertEqual(result.satisfying_assignments, 2)
+        self.assertIsNone(result.classifications)
+        self.assertIsNone(result.labels_match_solution)
+        self.assertEqual(kb, before)
+
+    def test_cli_reports_label_mismatch_without_changing_solution(self) -> None:
+        puzzle = json.loads(SAMPLE.read_text(encoding="utf-8"))
+        expected = bf.check_puzzle(puzzle).unique_solution
+        next(c for c in puzzle["characters"] if c["cell"] == "A3")["criminal"] = True
+        output, errors = StringIO(), StringIO()
+        with patch("sys.argv", ["brute_force", "puzzle.json"]), \
+                patch.object(Path, "open", return_value=StringIO(json.dumps(puzzle))), \
+                redirect_stdout(output), redirect_stderr(errors):
+            with self.assertRaises(SystemExit) as caught:
+                bf.main()
+        report = json.loads(output.getvalue())
+        self.assertEqual(caught.exception.code, 1)
+        self.assertIn("labels do not match", errors.getvalue())
+        self.assertFalse(report["labels_match_solution"])
+        self.assertEqual(report["unique_solution"], expected)
+        self.assertEqual(report["satisfying_assignments"], 1)
+        self.assertEqual(report["assignments_checked"], 512)
 
 
 class PuzzleWithDoubleTests(unittest.TestCase):
@@ -544,6 +658,7 @@ class RealSemanticIntegrationTests(unittest.TestCase):
         self.assertEqual(result.satisfying_assignments, 1)
         self.assertEqual(result.unique_solution, expected)
         self.assertEqual(result.assignments_checked, 512)
+        self.assertTrue(result.labels_match_solution)
 
     def test_full_3x3_and_4x4_puzzles_cover_all_solution_classes(self) -> None:
         for n in (3, 4):
@@ -582,12 +697,16 @@ class RealSemanticIntegrationTests(unittest.TestCase):
         engine.load_puzzle(puzzle)
         public = engine.get_public_kb()
         public_before = deepcopy(public)
-        result = bf.count_solutions(public.revealed_clues, public.n,
-                                    known_statuses={c: s == CRIMINAL
-                                                    for c, s in public.proved.items()})
+        result = bf.check_public_kb(public)
         # A1 and C1 are face-up; the revealed clues force B2, C2, C3. Four cells are free.
         self.assertEqual(result.satisfying_assignments, 16)
         self.assertEqual(result.status, bf.MULTIPLE)
+        self.assertEqual(result.classifications, {
+            "A1": CRIMINAL, "B1": UNKNOWN, "C1": INNOCENT,
+            "A2": UNKNOWN, "B2": CRIMINAL, "C2": CRIMINAL,
+            "A3": UNKNOWN, "B3": UNKNOWN, "C3": CRIMINAL,
+        })
+        self.assertIsNone(result.labels_match_solution)
         self.assertEqual(public.proved, public_before.proved)
         self.assertEqual([c.params for c in public.revealed_clues],
                          [c.params for c in public_before.revealed_clues])
@@ -597,6 +716,7 @@ class RealSemanticIntegrationTests(unittest.TestCase):
         puzzle = json.loads(SAMPLE.read_text(encoding="utf-8"))
         before = deepcopy(puzzle)
         first = bf.check_puzzle(puzzle)
+        self.assertTrue(first.labels_match_solution)
         self.assertEqual(puzzle, before)
         for character in puzzle["characters"]:
             if character["cell"] not in puzzle["initially_revealed"]:
@@ -608,6 +728,8 @@ class RealSemanticIntegrationTests(unittest.TestCase):
         self.assertEqual(second.satisfying_assignments, 1)
         self.assertEqual(second.status, first.status)
         self.assertEqual(second.assignments_checked, first.assignments_checked)
+        self.assertFalse(second.labels_match_solution)
+        self.assertEqual(second.classifications, first.classifications)
 
     def test_real_sample_cli_exhaustive_and_early_stop(self) -> None:
         for flags in ([], ["--stop-after-two"]):
@@ -623,6 +745,7 @@ class RealSemanticIntegrationTests(unittest.TestCase):
                 self.assertEqual(report["assignments_checked"], 512)
                 self.assertTrue(report["exhaustive"])
                 self.assertTrue(report["count_is_exact"])
+                self.assertTrue(report["labels_match_solution"])
 
 
 if __name__ == "__main__":

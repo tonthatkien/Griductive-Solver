@@ -11,7 +11,7 @@ import argparse
 import json
 from collections.abc import Iterable, Iterator, Mapping
 from copy import deepcopy
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from itertools import product
 from pathlib import Path
 from time import perf_counter
@@ -19,7 +19,8 @@ from typing import Literal
 
 from engine import board
 from engine.clue import CORE_TYPES, COUNT_TYPES, EXT_TYPES, Clue, clue_from_dict, validate_clue
-from engine.constants import CRIMINAL, STATUSES
+from engine.constants import CRIMINAL, INCONSISTENT, INNOCENT, STATUSES, UNKNOWN
+from engine.game_state import PublicKB
 from logic.semantic import evaluate
 
 SUPPORTED_SIZES = (3, 4)
@@ -35,6 +36,9 @@ class CheckResult:
     assignments_checked includes assignments rejected by public known statuses.
     unique_solution is populated only after a complete search finds one model.
     runtime is elapsed seconds, including input validation, measured by perf_counter.
+    classifications is complete only after exhaustive search; UNSAT marks every
+    cell INCONSISTENT. A partial search returns None, never unproved forced statuses.
+    labels_match_solution compares stored labels AFTER search, only in check_puzzle.
     """
 
     assignments_checked: int
@@ -43,6 +47,8 @@ class CheckResult:
     unique_solution: Assignment | None
     exhaustive: bool
     runtime: float
+    classifications: dict[str, str] | None = None
+    labels_match_solution: bool | None = None
 
     @property
     def count_is_exact(self) -> bool:
@@ -65,13 +71,15 @@ def _validate_clue(clue: Clue, n: int) -> None:
         raise ValueError("Each constraint must be a Clue with dictionary params")
     if not isinstance(clue.type, str) or clue.type not in CLUE_TYPES:
         raise ValueError(f"Unsupported clue type: {clue.type!r}")
-    if "status" in clue.params and clue.params["status"] not in STATUSES:
-        raise ValueError(f"Invalid status: {clue.params['status']!r}")
     validate_clue(clue, n)
 
 
 def _prepare_clue(clue: Clue, n: int) -> Clue:
-    _validate_clue(clue, n)
+    try:
+        _validate_clue(clue, n)
+    except ValueError as error:
+        owner = clue.owner if isinstance(clue, Clue) else "?"
+        raise ValueError(f"character {owner}: invalid clue: {error}") from error
     prepared = deepcopy(clue)
     if prepared.type in (*COUNT_TYPES, "PARITY", "COMPARE"):
         prepared.params.setdefault("status", CRIMINAL)
@@ -108,15 +116,23 @@ def iter_assignments(n: int) -> Iterator[Assignment]:
     return (dict(zip(cells, values)) for values in product((False, True), repeat=n * n))
 
 
+def _evaluate_clue(clue: Clue, assignment: Assignment, n: int) -> bool:
+    verdict = evaluate(clue, assignment, n)
+    if type(verdict) is not bool:
+        raise TypeError("semantic.evaluate must return bool")
+    return verdict
+
+
 def _satisfies(clues: tuple[Clue, ...], assignment: Assignment, n: int) -> bool:
-    valid = True
-    for clue in clues:
-        verdict = evaluate(clue, assignment, n)
-        if type(verdict) is not bool:
-            raise TypeError("semantic.evaluate must return bool")
-        # Evaluate every clue, even after a false result, to expose unsupported clues.
-        valid = verdict and valid
-    return valid
+    return all(_evaluate_clue(clue, assignment, n) for clue in clues)
+
+
+def _classifications(seen: dict[str, int], exhaustive: bool) -> dict[str, str] | None:
+    if not exhaustive:
+        return None
+    # Each bit records whether a cell was observed Innocent or Criminal in any model.
+    statuses = {0: INCONSISTENT, 1: INNOCENT, 2: CRIMINAL, 3: UNKNOWN}
+    return {cell: statuses[mask] for cell, mask in seen.items()}
 
 
 def count_solutions(
@@ -143,6 +159,11 @@ def count_solutions(
         raise ValueError("stop_after_two must be Boolean")
     prepared = tuple(_prepare_clue(clue, n) for clue in clues)
     known = _known_statuses(known_statuses, n)
+    smoke = dict.fromkeys(board.all_cells(n), False)
+    for clue in prepared:
+        # Check each evaluator independently once; this is not a searched candidate.
+        _evaluate_clue(clue, smoke, n)
+    seen = dict.fromkeys(smoke, 0)
     checked = count = 0
     first_model = None
     for assignment in iter_assignments(n):
@@ -151,6 +172,8 @@ def count_solutions(
             continue
         if _satisfies(prepared, assignment, n):
             count += 1
+            for cell, value in assignment.items():
+                seen[cell] |= 2 if value else 1
             if count == 1:
                 first_model = assignment.copy()
             if stop_after_two and count == 2:
@@ -159,11 +182,27 @@ def count_solutions(
     status = UNSAT if count == 0 else UNIQUE if count == 1 else MULTIPLE
     return CheckResult(
         checked, count, status, first_model if count == 1 and exhaustive else None,
-        exhaustive, perf_counter() - started,
+        exhaustive, perf_counter() - started, classifications=_classifications(seen, exhaustive),
     )
 
 
-def _puzzle_clues(puzzle: dict, n: int) -> tuple[list[Clue], Assignment]:
+def check_public_kb(public_kb: PublicKB, *, stop_after_two: bool = False) -> CheckResult:
+    """Check only revealed clues and proved verdicts from PublicKB, without hidden labels.
+
+    Exhaustive classifications provide an independent reference for agent tests.
+    Incomplete search returns classifications=None. Invalid proved statuses raise
+    ValueError instead of silently converting UNKNOWN or malformed data to Innocent.
+    """
+    if not isinstance(public_kb, PublicKB) or not isinstance(public_kb.proved, Mapping):
+        raise ValueError("Expected PublicKB with a mapping of proved verdicts")
+    if any(status not in STATUSES for status in public_kb.proved.values()):
+        raise ValueError("Proved verdicts must be CRIMINAL or INNOCENT")
+    known = {cell: status == CRIMINAL for cell, status in public_kb.proved.items()}
+    return count_solutions(public_kb.revealed_clues, public_kb.n,
+                           known_statuses=known, stop_after_two=stop_after_two)
+
+
+def _puzzle_clues(puzzle: dict, n: int) -> tuple[list[Clue], Assignment, Assignment]:
     characters = puzzle.get("characters")
     if not isinstance(characters, list) or len(characters) != n * n:
         raise ValueError("Puzzle must contain exactly n*n characters")
@@ -195,14 +234,15 @@ def _puzzle_clues(puzzle: dict, n: int) -> tuple[list[Clue], Assignment]:
         _validate_cell(cell, n)
     if len(set(revealed)) != len(revealed):
         raise ValueError("Duplicate initially revealed cell")
-    return clues, {cell: labels[cell] for cell in revealed}
+    return clues, {cell: labels[cell] for cell in revealed}, labels
 
 
 def check_puzzle(puzzle: dict, *, stop_after_two: bool = False) -> CheckResult:
     """Check all clues plus initially face-up statuses in a JSON-format puzzle.
 
     Face-down criminal labels are schema-validated but NEVER constrain the search.
-    Does not mutate the input or compare its hidden solution to the computed model.
+    After solving, compares all stored labels to the unique model (when available).
+    Does not mutate input; that comparison never changes the search or its count.
     Invalid input raises ValueError; UNSAT and MULTIPLE are legitimate check results.
     """
     started = perf_counter()
@@ -210,12 +250,10 @@ def check_puzzle(puzzle: dict, *, stop_after_two: bool = False) -> CheckResult:
         raise ValueError("Puzzle must be an object")
     n = puzzle.get("n")
     _validate_size(n)
-    clues, known = _puzzle_clues(puzzle, n)
+    clues, known, labels = _puzzle_clues(puzzle, n)
     result = count_solutions(clues, n, known_statuses=known, stop_after_two=stop_after_two)
-    return CheckResult(
-        result.assignments_checked, result.satisfying_assignments, result.status,
-        result.unique_solution, result.exhaustive, perf_counter() - started,
-    )
+    match = labels == result.unique_solution if result.unique_solution is not None else None
+    return replace(result, labels_match_solution=match, runtime=perf_counter() - started)
 
 
 def main() -> None:
@@ -235,6 +273,8 @@ def main() -> None:
             )
         parser.exit(2, f"Checker error ({type(error).__name__}): {detail}\n")
     print(json.dumps({**asdict(result), "count_is_exact": result.count_is_exact}, indent=2))
+    if result.labels_match_solution is False:
+        parser.exit(1, "Stored labels do not match the unique solution\n")
 
 
 if __name__ == "__main__":
