@@ -2,6 +2,8 @@
 
 import ast
 import json
+import subprocess
+import sys
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from copy import deepcopy
@@ -12,8 +14,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from engine import board
-from engine.clue import Clue, clue_from_dict
-from engine.game_state import CRIMINAL, INNOCENT
+from engine.clue import COUNT_TYPES, PAIR_TYPES, Clue, clue_from_dict
+from engine.constants import CRIMINAL, INNOCENT
+from engine.game_state import GameEngine
 from logic import semantic
 from tools import brute_force as bf
 
@@ -223,6 +226,24 @@ class PuzzleWithDoubleTests(unittest.TestCase):
 class InputValidationTests(unittest.TestCase):
     """Invalid schemas fail before the evaluator is called."""
 
+    def test_mixed_case_names_follow_engine_alphabetical_order(self) -> None:
+        puzzle = make_puzzle()
+        names = ["alice", "Bob", "charlie", "Dave", "eve", "Frank", "grace", "Heidi", "ivan"]
+        for character, name in zip(puzzle["characters"], names):
+            character["name"] = name
+        GameEngine().load_puzzle(puzzle)
+        self.assertEqual(bf.check_puzzle(puzzle).satisfying_assignments, 256)
+
+    def test_duplicate_names_are_rejected_like_engine(self) -> None:
+        for name in ("Person 00", "person 00"):
+            puzzle = make_puzzle()
+            puzzle["characters"][1]["name"] = name
+            with self.subTest(name=name):
+                with self.assertRaises(ValueError):
+                    GameEngine().load_puzzle(puzzle)
+                with self.assertRaises(ValueError):
+                    bf.check_puzzle(puzzle)
+
     def test_invalid_puzzles_fail_before_evaluation(self) -> None:
         invalid = [None, [], {}, {"n": 5}, {"n": True}]
         mutations = [
@@ -328,9 +349,6 @@ class IndependenceTests(unittest.TestCase):
                 self.assertFalse(any(part in ast.unparse(node.func) for part in forbidden))
 
     def test_import_does_not_load_solver_encoder_or_gui(self) -> None:
-        import subprocess
-        import sys
-
         code = (
             "import sys; from tools import brute_force; "
             "assert not any(m in sys.modules for m in "
@@ -378,20 +396,20 @@ class CommandLineWithDoubleTests(unittest.TestCase):
         self.assertEqual(output.getvalue(), "")
         self.assertIn("D5/D6", errors.getvalue())
 
+    def test_empty_type_error_is_not_reported_as_missing_dependency(self) -> None:
+        errors = StringIO()
+        with patch("sys.argv", ["brute_force", "puzzle.json"]), \
+                patch.object(Path, "open", return_value=StringIO(json.dumps(make_puzzle()))), \
+                patch.object(bf, "evaluate", side_effect=TypeError), redirect_stderr(errors):
+            with self.assertRaises(SystemExit) as caught:
+                bf.main()
+        self.assertEqual(caught.exception.code, 2)
+        self.assertIn("TypeError", errors.getvalue())
+        self.assertNotIn("D5/D6", errors.getvalue())
+
 
 class RealSemanticIntegrationTests(unittest.TestCase):
-    """Real evaluator only: skipped explicitly while D5's FACT probe is unimplemented.
-
-    Once FACT works, all remaining unsupported clues FAIL, including D6 extensions.
-    No test double is used in this class.
-    """
-
-    def setUp(self) -> None:
-        try:
-            semantic.evaluate(make_clue(target="A1", status=CRIMINAL),
-                              dict.fromkeys(board.all_cells(3), False), 3)
-        except NotImplementedError:
-            self.skipTest("BLOCKED: real D5 semantic.evaluate FACT is unimplemented")
+    """Real merged D5/D6 evaluator only; unavailable or broken clues fail, never skip."""
 
     def assert_count(self, clue: Clue, expected: int) -> None:
         """Compare exhaustive counts against independently derived combinatorial counts."""
@@ -406,13 +424,13 @@ class RealSemanticIntegrationTests(unittest.TestCase):
                 self.assert_count(make_clue(target="A1", status=status), 256)
 
     def test_pair_clues(self) -> None:
-        for kind in bf.PAIR_TYPES:
+        for kind in PAIR_TYPES:
             with self.subTest(kind=kind):
                 self.assert_count(make_clue(kind, cell1="A1", cell2="B1"), 256)
 
     def test_cardinality_boundaries_and_innocent_counts(self) -> None:
         for status in (CRIMINAL, INNOCENT):
-            for kind in bf.COUNT_TYPES:
+            for kind in COUNT_TYPES:
                 for k in range(4):
                     count = sum(comb(3, i) for i in range(4)
                                 if {"EXACTLY": i == k, "AT_LEAST": i >= k,
@@ -526,6 +544,85 @@ class RealSemanticIntegrationTests(unittest.TestCase):
         self.assertEqual(result.satisfying_assignments, 1)
         self.assertEqual(result.unique_solution, expected)
         self.assertEqual(result.assignments_checked, 512)
+
+    def test_full_3x3_and_4x4_puzzles_cover_all_solution_classes(self) -> None:
+        for n in (3, 4):
+            puzzle = make_puzzle(n)
+            with self.subTest(n=n, status=bf.MULTIPLE):
+                multiple = bf.check_puzzle(puzzle)
+                self.assertEqual(multiple.status, bf.MULTIPLE)
+                self.assertEqual(multiple.satisfying_assignments, 2 ** (n * n - 1))
+                self.assertEqual(multiple.assignments_checked, 2 ** (n * n))
+                self.assertTrue(multiple.count_is_exact)
+                self.assertIsNone(multiple.unique_solution)
+            puzzle["characters"][-1]["clue"]["status"] = CRIMINAL
+            with self.subTest(n=n, status=bf.UNSAT):
+                unsat = bf.check_puzzle(puzzle, stop_after_two=True)
+                self.assertEqual(unsat.status, bf.UNSAT)
+                self.assertEqual(unsat.satisfying_assignments, 0)
+                self.assertEqual(unsat.assignments_checked, 2 ** (n * n))
+                self.assertTrue(unsat.exhaustive)
+            expected = {}
+            for index, character in enumerate(puzzle["characters"]):
+                criminal = index % 2 == 1
+                expected[character["cell"]] = criminal
+                character["clue"] = {"type": "FACT", "target": character["cell"],
+                                     "status": CRIMINAL if criminal else INNOCENT}
+            with self.subTest(n=n, status=bf.UNIQUE):
+                unique = bf.check_puzzle(puzzle, stop_after_two=True)
+                self.assertEqual(unique.status, bf.UNIQUE)
+                self.assertEqual(unique.satisfying_assignments, 1)
+                self.assertEqual(unique.unique_solution, expected)
+                self.assertEqual(unique.assignments_checked, 2 ** (n * n))
+                self.assertTrue(unique.exhaustive)
+
+    def test_public_engine_kb_is_distinct_from_complete_puzzle(self) -> None:
+        puzzle = json.loads(SAMPLE.read_text(encoding="utf-8"))
+        engine = GameEngine()
+        engine.load_puzzle(puzzle)
+        public = engine.get_public_kb()
+        public_before = deepcopy(public)
+        result = bf.count_solutions(public.revealed_clues, public.n,
+                                    known_statuses={c: s == CRIMINAL
+                                                    for c, s in public.proved.items()})
+        # A1 and C1 are face-up; the revealed clues force B2, C2, C3. Four cells are free.
+        self.assertEqual(result.satisfying_assignments, 16)
+        self.assertEqual(result.status, bf.MULTIPLE)
+        self.assertEqual(public.proved, public_before.proved)
+        self.assertEqual([c.params for c in public.revealed_clues],
+                         [c.params for c in public_before.revealed_clues])
+        self.assertEqual(bf.check_puzzle(puzzle).satisfying_assignments, 1)
+
+    def test_real_sample_ignores_hidden_labels_and_preserves_input(self) -> None:
+        puzzle = json.loads(SAMPLE.read_text(encoding="utf-8"))
+        before = deepcopy(puzzle)
+        first = bf.check_puzzle(puzzle)
+        self.assertEqual(puzzle, before)
+        for character in puzzle["characters"]:
+            if character["cell"] not in puzzle["initially_revealed"]:
+                character["criminal"] = not character["criminal"]
+        altered = deepcopy(puzzle)
+        second = bf.check_puzzle(puzzle)
+        self.assertEqual(puzzle, altered)
+        self.assertEqual(second.unique_solution, first.unique_solution)
+        self.assertEqual(second.satisfying_assignments, 1)
+        self.assertEqual(second.status, first.status)
+        self.assertEqual(second.assignments_checked, first.assignments_checked)
+
+    def test_real_sample_cli_exhaustive_and_early_stop(self) -> None:
+        for flags in ([], ["--stop-after-two"]):
+            with self.subTest(flags=flags):
+                process = subprocess.run(
+                    [sys.executable, "-m", "tools.brute_force", str(SAMPLE), *flags],
+                    cwd=SAMPLE.parents[2], capture_output=True, text=True, check=True,
+                )
+                report = json.loads(process.stdout)
+                self.assertEqual(process.stderr, "")
+                self.assertEqual(report["status"], bf.UNIQUE)
+                self.assertEqual(report["satisfying_assignments"], 1)
+                self.assertEqual(report["assignments_checked"], 512)
+                self.assertTrue(report["exhaustive"])
+                self.assertTrue(report["count_is_exact"])
 
 
 if __name__ == "__main__":

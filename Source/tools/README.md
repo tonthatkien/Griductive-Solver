@@ -1,24 +1,21 @@
 # B2 brute-force checker
 
-Offline reference checker for 3×3 and 4×4 boards, owned by Gia Hân and reviewed by
-Kiên (`tonthatkien`). Uses `logic.semantic.evaluate(Clue, assignment, n)`;
+Offline reference checker for 3×3 and 4×4 boards, owned by Gia Hân with assigned
+reviewer Kiên (`tonthatkien`). Uses `logic.semantic.evaluate(Clue, assignment, n)`;
 does not import DPLL or the CNF encoder. No extra Python dependencies.
 
 ## Status and dependency
 
-At base commit `0f950c0af54d87299debdd3f8c84cc386c635fdd`, D5's evaluator is a stub
-raising `NotImplementedError`. B2 search mechanics can be tested with explicitly
-labelled test doubles. **Real puzzle results and acceptance remain blocked by D5.**
-PARITY and COMPARE integration also requires D6. The real integration tests skip
-while the FACT readiness probe raises `NotImplementedError`. Once FACT works,
-failures in other clue implementations are test failures, not silently skipped.
+D5 and D6 were merged in [PR #10](https://github.com/tonthatkien/Griductive-Solver/pull/10),
+at main commit `9d65892e6aec5309d2cd175ecd8cc86e26e1e576`. B2 is tested with that
+real evaluator for all six core clues and both extensions. Integration tests are
+mandatory: missing or broken evaluator implementations now fail rather than skip.
 
-B1's merged `docs/INTERFACES.md` defines `target`, `SAME_STATUS`, `DIFFERENT_STATUS`,
-`cell1/cell2`, `number`, `letter`, `list`, and `region1/region2`. The current
-`engine.clue` implementation still documents/resolves the old schema and its
-validator is a stub. B2 validates the agreed JSON schema locally, using the actual
-`Clue` and `clue_from_dict`, without changing that shared module or translating
-into its obsolete schema. This boundary needs review when A2/D5 are integrated.
+Clues use the actual `Clue`, `clue_from_dict`, shared `validate_clue` and clue-type
+constants from `engine.clue`. B2 validates puzzle shape and caller-supplied
+assignments; it no longer duplicates the shared region/clue schema validator.
+Character names must increase strictly by `casefold()` in row-major cell order,
+matching the current loader; duplicate names, including case variants, are rejected.
 
 ## Usage
 
@@ -51,7 +48,7 @@ not performed. The input puzzle and clue dictionaries remain unchanged.
 
 `count_solutions` accepts an iterable of `Clue` objects and a mapping of selected
 public Boolean facts. An empty clue set is valid here. `check_puzzle` requires
-exactly N² characters, one valid clue per character, alphabetically ordered names
+exactly N² characters, one valid clue per character, distinct alphabetically ordered names
 in row-major cell order, and nonempty, distinct, valid initially revealed cells.
 Schema errors raise `ValueError`. Uniqueness is a check result, not an input
 precondition: inconsistent and ambiguous puzzles must be inspectable.
@@ -98,16 +95,26 @@ assignments); DPLL stress testing belongs to later tasks.
 
 ## Verification boundary
 
-Enumeration, counting, face-up constraints, validation, immutability, failure
-propagation, CLI output and independence tests use no evaluator or explicit
-test doubles. They do not certify D5 semantics. Separate real integration tests
-cover all eight clue types, both statuses, all region types, counting boundaries,
-parity at zero, comparison operators, overlapping regions, 4×4, and `p01.json`.
-Expected counts come from combinatorics and direct truth values. The sample's
-expected model is derived from its clues, not its hidden labels; it remains an
-unverified expectation until D5 actually runs. Do not claim a sample result from
-these skipped tests.
+Enumeration, search mechanics and error propagation tests use no evaluator or
+explicitly labelled test doubles. Separate mandatory real integration tests cover
+all eight clue types, both statuses, all region types, counting boundaries, parity
+at zero, comparison operators, overlapping regions, and all three solution classes
+on full 3×3/4×4 puzzle fixtures. They also exercise the actual CLI, immutability,
+hidden-label independence, and the current engine's public KB. No DPLL or encoder
+is used as the oracle: expected counts come from combinatorics and truth tables.
 
-PR acceptance additionally requires real integration, review approval and CI.
+With the merged evaluator, `p01.json` has exactly **one** model after all **512**
+assignments are checked. Criminal cells are **A1, B2, C2, C3**; all others are
+Innocent. Its initial public KB alone admits **16** models. Flipping only face-down
+stored labels leaves the computed solution unchanged. These are real integration
+results, not mock outputs. The expected sample model was derived from the clues
+before being verified by the checker.
+
+Validation on this base: **47 B2 tests**, including **14 dedicated real integration
+tests**, pass without skips. Full repository tests and smoke results are recorded
+separately in the review report. The GUI entry point on this main base remains an
+unimplemented F1 stub, outside B2; checker CLI success does not certify the GUI.
+
+PR acceptance additionally requires review approval and CI.
 The AI usage log is awaiting the user's completion and authorization; it is not
 included in this change. No merge is authorized.

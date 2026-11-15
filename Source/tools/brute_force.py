@@ -1,9 +1,8 @@
 """B2: deterministic, exhaustive reference checker for 3x3 and 4x4 puzzles.
 
-Uses only semantic.evaluate, never a SAT solver or an encoder. JSON validation
-follows docs/INTERFACES.md (B1); engine.clue's current validator is still a stub
-and its region resolver still uses the older schema. Do not translate clues to
-that schema: D5 must consume the agreed contract. Evaluator errors propagate.
+Uses only semantic.evaluate, never a SAT solver or an encoder. Clue validation
+uses engine.clue's shared validator and the agreed docs/INTERFACES.md schema.
+Evaluator errors propagate instead of being interpreted as UNSAT.
 """
 
 from __future__ import annotations
@@ -19,15 +18,12 @@ from time import perf_counter
 from typing import Literal
 
 from engine import board
-from engine.clue import Clue, clue_from_dict
-from engine.game_state import CRIMINAL, INNOCENT
+from engine.clue import CORE_TYPES, COUNT_TYPES, EXT_TYPES, Clue, clue_from_dict, validate_clue
+from engine.constants import CRIMINAL, STATUSES
 from logic.semantic import evaluate
 
 SUPPORTED_SIZES = (3, 4)
-COUNT_TYPES = ("EXACTLY", "AT_LEAST", "AT_MOST")
-PAIR_TYPES = ("SAME_STATUS", "DIFFERENT_STATUS")
-CLUE_TYPES = ("FACT", *PAIR_TYPES, *COUNT_TYPES, "PARITY", "COMPARE")
-COMPARE_OPS = ("GT", "GE", "EQ", "LE", "LT")
+CLUE_TYPES = CORE_TYPES + EXT_TYPES
 UNSAT, UNIQUE, MULTIPLE = "UNSAT", "UNIQUE", "MULTIPLE"
 Assignment = dict[str, bool]
 
@@ -60,74 +56,18 @@ def _validate_size(n: int) -> None:
 
 
 def _validate_cell(cell: object, n: int) -> None:
-    if not isinstance(cell, str) or cell not in board.all_cells(n):
+    if not isinstance(cell, str) or not board.is_valid_cell(cell, n):
         raise ValueError(f"Invalid cell for {n}x{n}: {cell!r}")
-
-
-def _validate_status(status: object) -> None:
-    if status not in (CRIMINAL, INNOCENT):
-        raise ValueError(f"Invalid status: {status!r}")
-
-
-def _region_cells(region: object, n: int) -> list[str]:
-    if not isinstance(region, dict):
-        raise ValueError("Region must be an object")
-    kind = region.get("type")
-    if kind == "row":
-        number = region.get("number")
-        if type(number) is not int or not 1 <= number <= n:
-            raise ValueError("Row number must be an integer in 1..n")
-        return board.row_cells(n, number)
-    if kind == "col":
-        letter = region.get("letter")
-        if not isinstance(letter, str) or letter not in board.COLS[:n] or len(letter) != 1:
-            raise ValueError("Column letter must be uppercase and in bounds")
-        return board.col_cells(n, letter)
-    if kind == "neighbors":
-        _validate_cell(region.get("cell"), n)
-        return board.neighbor_cells(n, region["cell"])
-    if kind == "list":
-        cells = region.get("cells")
-        if not isinstance(cells, list) or not cells:
-            raise ValueError("Explicit region must be a nonempty list")
-        for cell in cells:
-            _validate_cell(cell, n)
-        if len(set(cells)) != len(cells):
-            raise ValueError("Region contains duplicate cells")
-        return cells
-    raise ValueError(f"Unsupported region type: {kind!r}")
 
 
 def _validate_clue(clue: Clue, n: int) -> None:
     if not isinstance(clue, Clue) or not isinstance(clue.params, dict):
         raise ValueError("Each constraint must be a Clue with dictionary params")
-    _validate_cell(clue.owner, n)
     if not isinstance(clue.type, str) or clue.type not in CLUE_TYPES:
         raise ValueError(f"Unsupported clue type: {clue.type!r}")
-    params = clue.params
-    if "status" in params:
-        _validate_status(params["status"])
-    if clue.type == "FACT":
-        _validate_cell(params.get("target"), n)
-        _validate_status(params.get("status"))
-    elif clue.type in PAIR_TYPES:
-        for key in ("cell1", "cell2"):
-            _validate_cell(params.get(key), n)
-        if params["cell1"] == params["cell2"]:
-            raise ValueError("Pair clues must reference distinct cells")
-    elif clue.type == "COMPARE":
-        for key in ("region1", "region2"):
-            _region_cells(params.get(key), n)
-        if params.get("op") not in COMPARE_OPS:
-            raise ValueError("Invalid comparison operator")
-    else:
-        cells = _region_cells(params.get("region"), n)
-        if clue.type in COUNT_TYPES:
-            count = params.get("k")
-            if type(count) is not int or not 0 <= count <= len(cells):
-                raise ValueError("k must be an integer in 0..region size")
-        elif params.get("parity") not in ("EVEN", "ODD"):
-            raise ValueError("Invalid parity")
+    if "status" in clue.params and clue.params["status"] not in STATUSES:
+        raise ValueError(f"Invalid status: {clue.params['status']!r}")
+    validate_clue(clue, n)
 
 
 def _prepare_clue(clue: Clue, n: int) -> Clue:
@@ -243,11 +183,11 @@ def _puzzle_clues(puzzle: dict, n: int) -> tuple[list[Clue], Assignment]:
         raw = character.get("clue")
         if not isinstance(raw, dict) or "type" not in raw:
             raise ValueError("Each character must have a clue object with a type")
-        clues.append(_prepare_clue(clue_from_dict(cell, raw), n))
-        labels[cell], names[cell] = character["criminal"], character["name"]
+        clues.append(clue_from_dict(cell, raw))
+        labels[cell], names[cell] = character["criminal"], character["name"].casefold()
     ordered_names = [names[cell] for cell in board.all_cells(n)]
-    if ordered_names != sorted(ordered_names):
-        raise ValueError("Character names must be alphabetical in row-major order")
+    if any(a >= b for a, b in zip(ordered_names, ordered_names[1:])):
+        raise ValueError("Character names must be distinct and alphabetical in row-major order")
     revealed = puzzle.get("initially_revealed")
     if not isinstance(revealed, list) or not revealed:
         raise ValueError("initially_revealed must be a nonempty list")
@@ -288,7 +228,11 @@ def main() -> None:
         with args.puzzle.open(encoding="utf-8") as stream:
             result = check_puzzle(json.load(stream), stop_after_two=args.stop_after_two)
     except (OSError, ValueError, TypeError, NotImplementedError) as error:
-        detail = str(error) or "semantic.evaluate is unimplemented; D5/D6 integration is required"
+        detail = str(error) or "No further error details"
+        if isinstance(error, NotImplementedError):
+            detail = str(error) or (
+                "semantic.evaluate is unimplemented; D5/D6 integration is required"
+            )
         parser.exit(2, f"Checker error ({type(error).__name__}): {detail}\n")
     print(json.dumps({**asdict(result), "count_is_exact": result.count_is_exact}, indent=2))
 
