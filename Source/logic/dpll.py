@@ -30,7 +30,7 @@ class SolveResult:
     Thuộc tính:
         sat: True nếu công thức CNF thỏa mãn, False nếu mâu thuẫn (UNSAT) hoặc quá thời gian.
         model: Bảng gán đầy đủ {var: bool} cho mọi biến từ 1 đến num_vars nếu SAT,
-            hoặc None nếu UNSAT.
+            hoặc None nếu UNSAT hoặc quá thời gian (TIMEOUT).
         stats: Thống kê chi tiết quá trình giải (decisions, propagations, backtracks, runtime).
         timed_out: True nếu quá trình giải bị dừng do vượt quá thời gian timeout, ngược lại False.
     """
