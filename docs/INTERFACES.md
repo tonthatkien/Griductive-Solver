@@ -284,3 +284,17 @@ GameEngine --get_public_kb()--> PublicKB --> Encoder.build_kb --> DPLL
 | `logic.agent` | `LogicAgent().classify(public_kb, cell) -> str` | Phân loại trạng thái nhân vật |
 | `logic.agent` | `LogicAgent().auto_solve(engine) -> list[TraceEntry]` | Tự động giải puzzle |
 | `logic.agent` | `uniqueness_check(all_clues, n)` | Kiểm tra puzzle có nghiệm duy nhất |
+
+
+### 4.1. Quy ước kết quả trả về của DPLL (SolveResult)
+
+Cấu trúc trả về của `DPLLSolver().solve(...)` là `SolveResult(sat, model, stats, timed_out)`. Các module gọi DPLL (đặc biệt là `LogicAgent.classify`) **cần phân biệt rõ 3 trạng thái kết quả**:
+
+| Trạng thái | Điều kiện cờ | `model` | Ý nghĩa logic |
+|---|---|---|---|
+| **SAT** | `sat=True` | `dict[int, bool]` (1..num_vars) | Công thức thỏa mãn; model là phép gán hợp lệ cho mọi biến. |
+| **UNSAT** | `sat=False`, `timed_out=False` | `None` | Công thức mâu thuẫn chắc chắn (vô nghiệm). |
+| **TIMEOUT** | `sat=False`, `timed_out=True` | `None` | Quá thời gian timeout khi tìm kiếm; chưa thể kết luận SAT hay UNSAT. |
+
+**Lưu ý cho module gọi DPLL (`logic.agent`):**
+Không đánh đồng `sat=False` là `UNSAT`. Module gọi phải kiểm tra cờ `timed_out` trước. Nếu `result.timed_out == True`, hệ thống đang ở trạng thái `TIMEOUT` (không được kết luận là mâu thuẫn để tránh suy diễn sai thành khẳng định).
