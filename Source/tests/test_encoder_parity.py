@@ -32,18 +32,20 @@ def count_extensions(clauses, fixed, aux_vars) -> int:
 
 class TestEncodeParity(unittest.TestCase):
     def check_all_assignments(self, clue: Clue) -> None:
-        """Với mọi assignment của vùng: thỏa parity <=> đúng 1 cách gán biến phụ, ngược lại 0"""
-        enc = Encoder(N)
-        clauses = enc.encode_parity(clue)
+        """Với mọi assignment của vùng: thỏa parity <=> đúng 1 cách gán biến phụ, ngược lại 0.
+        Chạy qua cả encode_parity (trực tiếp) và encode_clue (qua dispatch)"""
         cells = clue_cells(clue, N)
-        aux_vars = list(range(board.first_aux_var(N), board.first_aux_var(N) + enc.num_aux))
         target = clue.params.get("status", "CRIMINAL") == "CRIMINAL"
-        for values in itertools.product([False, True], repeat=len(cells)):
-            fixed = {board.var_of(c, N): v for c, v in zip(cells, values)}
-            count = sum(1 for v in values if v == target)
-            ok = count % 2 == 1 if clue.params["parity"] == "ODD" else count % 2 == 0
-            with self.subTest(values=values):
-                self.assertEqual(count_extensions(clauses, fixed, aux_vars), 1 if ok else 0)
+        for method in ("encode_parity", "encode_clue"):
+            enc = Encoder(N)
+            clauses = getattr(enc, method)(clue)
+            aux_vars = list(range(board.first_aux_var(N), board.first_aux_var(N) + enc.num_aux))
+            for values in itertools.product([False, True], repeat=len(cells)):
+                fixed = {board.var_of(c, N): v for c, v in zip(cells, values)}
+                count = sum(1 for v in values if v == target)
+                ok = count % 2 == 1 if clue.params["parity"] == "ODD" else count % 2 == 0
+                with self.subTest(method=method, values=values):
+                    self.assertEqual(count_extensions(clauses, fixed, aux_vars), 1 if ok else 0)
 
     def test_odd_on_row_matches_parity_for_every_assignment(self):
         self.check_all_assignments(mk("ODD", ROW1))
@@ -123,6 +125,35 @@ class TestEncodeParity(unittest.TestCase):
         for clue in (mk("even", ROW1), mk("ODD", {"type": "row", "number": 9})):
             with self.assertRaises(ValueError):
                 Encoder(N).encode_parity(clue)
+
+
+class TestEncodeClueDispatchesParity(unittest.TestCase):
+    def test_encode_clue_does_not_reject_parity(self):
+        for parity in ("EVEN", "ODD"):
+            with self.subTest(parity=parity):
+                self.assertTrue(Encoder(N).encode_clue(mk(parity, ROW1)))
+
+    def test_encode_clue_matches_encode_parity(self):
+        for parity in ("EVEN", "ODD"):
+            for region in (ONE_CELL, ROW1, NEI_A1, NEI_B2):
+                for extra in ({}, {"status": "INNOCENT"}):
+                    clue = mk(parity, region, **extra)
+                    via_clue, direct = Encoder(N), Encoder(N)
+                    with self.subTest(parity=parity, region=region, extra=extra):
+                        self.assertEqual(via_clue.encode_clue(clue), direct.encode_parity(clue))
+                        self.assertEqual(via_clue.num_aux, direct.num_aux)
+
+    def test_encode_clue_continues_aux_numbering_across_calls(self):
+        enc = Encoder(N)
+        enc.encode_clue(mk("ODD", ROW1))
+        enc.encode_clue(mk("EVEN", ROW1))
+        self.assertEqual(enc.num_aux, 2)
+        self.assertEqual(enc.new_aux(), 12)
+
+    def test_encode_clue_still_validates_parity_clue(self):
+        for clue in (mk("even", ROW1), mk("ODD", {"type": "row", "number": 9})):
+            with self.assertRaises(ValueError):
+                Encoder(N).encode_clue(clue)
 
 
 if __name__ == "__main__":

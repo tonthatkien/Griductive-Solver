@@ -132,7 +132,7 @@ class Encoder:
     def encode_clue(self, clue: Clue) -> List[Clause]:
         """
         Đổi một clue sang CNF (FACT, SAME_STATUS, DIFFERENT_STATUS,
-                                  EXACTLY, AT_LEAST, AT_MOST)
+                                  EXACTLY, AT_LEAST, AT_MOST, PARITY)
         """
         validate_clue(clue, self.n)
         if clue.type == "FACT":
@@ -147,7 +147,9 @@ class Encoder:
             return self._encode_at_least(clue)
         if clue.type == "EXACTLY":
             return self._encode_exactly(clue)
-        raise NotImplementedError("C4-C5")
+        if clue.type == "PARITY":
+            return self.encode_parity(clue)
+        raise NotImplementedError("C5")
 
     def _encode_fact(self, clue: Clue) -> List[Clause]:
         """FACT: ô target có trạng thái status  ->  unit clause [±Ci], 0 biến phụ"""
