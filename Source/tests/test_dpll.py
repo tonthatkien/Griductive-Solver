@@ -257,7 +257,7 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
 
 
 class TestDPLLBranchingAndBacktracking(unittest.TestCase):
-    """Kiểm thử thuật toán DPLL: chọn biến deterministic, branching và backtracking (Task D2)."""
+    """Kiểm thử thuật toán DPLL: chọn biến deterministic, branching và backtracking."""
 
     def setUp(self) -> None:
         self.solver = DPLLSolver()
@@ -375,7 +375,7 @@ class TestDPLLBranchingAndBacktracking(unittest.TestCase):
         assert res_model.model is not None
         self.assertEqual(set(res_model.model.keys()), {1, 2, 3, 4})
 
-        # 2. Tính tất định (deterministic): 2 lần giải liên tiếp cho ra model và stats trùng khớp 100%
+        # 2. Tính tất định: 2 lần giải liên tiếp cho ra model và stats trùng khớp 100%
         clauses = [[1, 2, 3], [-1, 2], [-2, -3], [-1, -2]]
         run1 = self.solver.solve(clauses, num_vars=3)
         run2 = self.solver.solve(clauses, num_vars=3)
@@ -418,6 +418,237 @@ class TestDPLLBranchingAndBacktracking(unittest.TestCase):
                 self.assertTrue(
                     all(self.solver.is_clause_satisfied(c, res.model) for c in clauses)
                 )
+
+
+class TestDPLLAssumptionsAndModel(unittest.TestCase):
+    """Kiểm thử DPLL với assumptions và trả kết quả SAT/UNSAT kèm model."""
+
+    def setUp(self) -> None:
+        self.solver = DPLLSolver()
+
+    def test_solve_preserves_kb_clauses_and_assumptions(self) -> None:
+        """Hàm solve không làm biến đổi danh sách mệnh đề gốc và assumptions."""
+        # 1. Kiểm tra bất biến khi suy diễn bằng lan truyền đơn vị
+        clauses = [[1, 2], [-1, 2], [-2, 3]]
+        copy_clauses = [list(c) for c in clauses]
+        clause_ids = [id(c) for c in clauses]
+
+        assumptions = [-2]
+        copy_assumptions = list(assumptions)
+
+        res = self.solver.solve(clauses, num_vars=3, assumptions=assumptions)
+        self.assertEqual(clauses, copy_clauses)
+        self.assertEqual([id(c) for c in clauses], clause_ids)
+        self.assertEqual(assumptions, copy_assumptions)
+
+        # 2. Kiểm tra bất biến khi giải thuật thực sự kích hoạt rẽ nhánh và quay lui
+        # (x1 ∨ x2) ∧ (¬x1 ∨ x3) ∧ (¬x1 ∨ ¬x3) ∧ (x4 ∨ x5) với assumption [-5]:
+        # Nhánh 1=True dẫn tới mâu thuẫn giữa x3 và ¬x3, buộc DPLL phải quay lui sang 1=False.
+        clauses_bt = [[1, 2], [-1, 3], [-1, -3], [4, 5]]
+        copy_clauses_bt = [list(c) for c in clauses_bt]
+        clause_ids_bt = [id(c) for c in clauses_bt]
+
+        assump_bt = [-5]
+        copy_assump_bt = list(assump_bt)
+
+        res_bt = self.solver.solve(clauses_bt, num_vars=5, assumptions=assump_bt)
+        # Xác nhận có kích hoạt quay lui trong quá trình tìm kiếm
+        self.assertTrue(res_bt.sat)
+        self.assertGreaterEqual(res_bt.stats.backtracks, 1)
+        # Dữ liệu clauses và assumptions không bị biến đổi sau khi quay lui
+        self.assertEqual(clauses_bt, copy_clauses_bt)
+        self.assertEqual([id(c) for c in clauses_bt], clause_ids_bt)
+        self.assertEqual(assump_bt, copy_assump_bt)
+
+    def test_sat_returns_complete_model_satisfying_all_constraints(self) -> None:
+        """Khi SAT, model trả về chứa đủ mọi biến từ 1 đến num_vars và thỏa mãn toàn bộ mệnh đề."""
+        clauses = [[1, 2], [-1, 3]]
+        res = self.solver.solve(clauses, num_vars=5, assumptions=[2])
+        self.assertTrue(res.sat)
+        self.assertIsNotNone(res.model)
+        assert res.model is not None
+
+        # Model phải có đầy đủ mọi biến từ 1 đến num_vars
+        self.assertEqual(set(res.model.keys()), {1, 2, 3, 4, 5})
+
+        # Giá trị assumption phải được thỏa mãn
+        self.assertTrue(res.model[2])
+
+        # Toàn bộ mệnh đề phải thỏa mãn
+        for c in clauses:
+            self.assertTrue(self.solver.is_clause_satisfied(c, res.model))
+
+    def test_unsat_returns_none_model(self) -> None:
+        """Khi UNSAT, cờ sat là False, model là None và timed_out là False."""
+        # 1. Công thức vô nghiệm ngay từ clauses gốc
+        res_conflict = self.solver.solve([[1], [-1]], num_vars=1)
+        self.assertFalse(res_conflict.sat)
+        self.assertIsNone(res_conflict.model)
+        self.assertFalse(res_conflict.timed_out)
+
+        # 2. Assumptions tự mâu thuẫn trực tiếp
+        res_assump_conflict = self.solver.solve([[1, 2]], num_vars=2, assumptions=[1, -1])
+        self.assertFalse(res_assump_conflict.sat)
+        self.assertIsNone(res_assump_conflict.model)
+        self.assertFalse(res_assump_conflict.timed_out)
+
+        # 3. Assumption xung đột với unit clause
+        res_unit_conflict = self.solver.solve([[1]], num_vars=2, assumptions=[-1])
+        self.assertFalse(res_unit_conflict.sat)
+        self.assertIsNone(res_unit_conflict.model)
+        self.assertFalse(res_unit_conflict.timed_out)
+
+        # 4. Assumption dẫn tới mâu thuẫn qua nhiều bước suy diễn
+        clauses = [[1, 2], [-1, 2]]
+        res_deduced_conflict = self.solver.solve(clauses, num_vars=2, assumptions=[-2])
+        self.assertFalse(res_deduced_conflict.sat)
+        self.assertIsNone(res_deduced_conflict.model)
+        self.assertFalse(res_deduced_conflict.timed_out)
+
+    def test_free_variables_assigned_in_full_model(self) -> None:
+        """Biến tự do không xuất hiện trong mệnh đề vẫn có mặt trong model với giá trị mặc định."""
+        clauses = [[1, 2]]
+        res = self.solver.solve(clauses, num_vars=6, assumptions=[1, 4])
+        self.assertTrue(res.sat)
+        self.assertIsNotNone(res.model)
+        assert res.model is not None
+
+        self.assertEqual(set(res.model.keys()), {1, 2, 3, 4, 5, 6})
+        self.assertTrue(res.model[1])
+        self.assertTrue(res.model[4])  # Biến tự do được cố định qua assumption
+        self.assertFalse(res.model[3])  # Biến tự do mặc định False
+        self.assertFalse(res.model[5])
+        self.assertFalse(res.model[6])
+
+    def test_empty_formula_and_zero_vars(self) -> None:
+        """Xử lý đúng công thức rỗng và num_vars bằng 0."""
+        # num_vars = 0, clauses rỗng
+        res_zero = self.solver.solve([], num_vars=0)
+        self.assertTrue(res_zero.sat)
+        self.assertEqual(res_zero.model, {})
+
+        # num_vars = 3, clauses rỗng
+        res_empty = self.solver.solve([], num_vars=3, assumptions=[2])
+        self.assertTrue(res_empty.sat)
+        self.assertEqual(res_empty.model, {1: False, 2: True, 3: False})
+
+    def test_assumptions_iterable_types_and_none(self) -> None:
+        """Hỗ trợ nhiều kiểu sequence khác nhau cho assumptions, bao gồm None."""
+        clauses = [[1, 2], [-1, 2]]
+
+        # assumptions = None (mặc định rỗng)
+        res_none = self.solver.solve(clauses, num_vars=2, assumptions=None)
+        self.assertTrue(res_none.sat and res_none.model)
+
+        # assumptions dạng tuple
+        res_tuple = self.solver.solve(clauses, num_vars=2, assumptions=(-2,))
+        self.assertFalse(res_tuple.sat)
+        self.assertIsNone(res_tuple.model)
+        self.assertFalse(res_tuple.timed_out)
+
+        # assumptions dạng generator
+        res_gen = self.solver.solve(clauses, num_vars=2, assumptions=(lit for lit in [2]))
+        self.assertTrue(res_gen.sat and res_gen.model and res_gen.model[2] is True)
+
+        # assumptions có literal lặp cùng dấu
+        res_dup = self.solver.solve(clauses, num_vars=2, assumptions=[2, 2])
+        self.assertTrue(res_dup.sat and res_dup.model and res_dup.model[2] is True)
+
+    def test_griductive_entailment_semantics(self) -> None:
+        """Kiểm tra 4 trạng thái suy diễn logic theo tài liệu thiết kế đồ án."""
+        # KB = (A ∨ B) ∧ (¬A ∨ B), với A = 1, B = 2
+        kb = [[1, 2], [-1, 2]]
+
+        # KB ∧ ¬B vô nghiệm (UNSAT) => B là Criminal (bắt buộc True)
+        res_not_b = self.solver.solve(kb, num_vars=2, assumptions=[-2])
+        self.assertFalse(res_not_b.sat)
+        self.assertIsNone(res_not_b.model)
+        self.assertFalse(res_not_b.timed_out)
+
+        # KB ∧ B có nghiệm (SAT)
+        res_b = self.solver.solve(kb, num_vars=2, assumptions=[2])
+        self.assertTrue(res_b.sat)
+        self.assertIsNotNone(res_b.model)
+        assert res_b.model is not None
+        self.assertTrue(res_b.model[2])
+
+        # KB ∧ A và KB ∧ ¬A đều SAT => trạng thái của A là Unknown
+        res_a = self.solver.solve(kb, num_vars=2, assumptions=[1])
+        res_not_a = self.solver.solve(kb, num_vars=2, assumptions=[-1])
+        self.assertTrue(res_a.sat)
+        self.assertTrue(res_not_a.sat)
+
+        # KB tự mâu thuẫn => Inconsistent
+        inconsistent_kb = [[1], [-1]]
+        res_inconsistent = self.solver.solve(inconsistent_kb, num_vars=1)
+        self.assertFalse(res_inconsistent.sat)
+        self.assertIsNone(res_inconsistent.model)
+        self.assertFalse(res_inconsistent.timed_out)
+
+    def test_solver_reuse_with_changing_assumptions(self) -> None:
+        """Các lần gọi solve liên tiếp trên cùng solver không gây rò rỉ trạng thái."""
+        clauses = [[1, 2]]
+
+        res1 = self.solver.solve(clauses, num_vars=2, assumptions=[1])
+        self.assertTrue(res1.sat and res1.model and res1.model[1] is True)
+
+        res2 = self.solver.solve(clauses, num_vars=2, assumptions=[-1])
+        self.assertTrue(
+            res2.sat and res2.model and res2.model[1] is False and res2.model[2] is True
+        )
+
+        res3 = self.solver.solve(clauses, num_vars=2, assumptions=[-1, -2])
+        self.assertFalse(res3.sat)
+        self.assertIsNone(res3.model)
+        self.assertFalse(res3.timed_out)
+
+        res4 = self.solver.solve(clauses, num_vars=2, assumptions=[])
+        self.assertTrue(res4.sat and res4.model)
+
+    def test_uniqueness_check_blocks_only_primary_variables(self) -> None:
+        """Kiểm tra tính duy nhất của nghiệm puzzle bằng blocking clause trên biến primary.
+
+        Quy ước (uniqueness_check):
+        Một puzzle có nghiệm duy nhất khi không có nghiệm thứ hai trên các ô của lưới
+        (biến primary: 1..num_primary). Biến phụ (auxiliary: > num_primary) chỉ hỗ trợ
+        encoding logic, không đại diện cho ô nhân vật. Do đó blocking clause chỉ phủ
+        định các biến primary, tránh nhầm lẫn việc biến phụ đổi giá trị thành nghiệm puzzle mới.
+        """
+        # Giả sử puzzle có 2 biến primary (1, 2) và 1 biến phụ (3)
+        num_primary = 2
+        num_vars = 3
+
+        # Ràng buộc: ô 1 là True, ô 2 là True; biến 3 là biến phụ tự do
+        clauses = [[1], [2]]
+
+        # Tìm nghiệm đầu tiên
+        res1 = self.solver.solve(clauses, num_vars=num_vars)
+        self.assertTrue(res1.sat)
+        self.assertIsNotNone(res1.model)
+        assert res1.model is not None
+        self.assertTrue(res1.model[1] and res1.model[2])
+
+        # Nếu chặn cả biến phụ (1..num_vars), nghiệm thứ hai vẫn tồn tại vì biến phụ 3 đổi giá trị
+        naive_blocking = [-var if res1.model[var] else var for var in range(1, num_vars + 1)]
+        res_naive = self.solver.solve(clauses + [naive_blocking], num_vars=num_vars)
+        self.assertTrue(res_naive.sat)  # Vẫn SAT vì chỉ khác biến phụ
+
+        #Chỉ tạo blocking clause trên các biến primary (1..num_primary)
+        primary_blocking = [
+            -var if res1.model[var] else var for var in range(1, num_primary + 1)
+        ]
+        self.assertEqual(primary_blocking, [-1, -2])
+
+        # Giải lại với blocking clause primary: không còn nghiệm nào khác cho các ô trên lưới
+        clauses_with_block = clauses + [primary_blocking]
+        res_unique = self.solver.solve(clauses_with_block, num_vars=num_vars)
+
+        self.assertFalse(res_unique.sat)
+        self.assertIsNone(res_unique.model)
+        self.assertFalse(res_unique.timed_out)
+
+        # Danh sách clauses ban đầu không bị biến đổi
+        self.assertEqual(clauses, [[1], [2]])
 
 
 if __name__ == "__main__":
