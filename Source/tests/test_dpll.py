@@ -257,7 +257,7 @@ class TestDPLLUnitPropagationAndConflict(unittest.TestCase):
 
 
 class TestDPLLBranchingAndBacktracking(unittest.TestCase):
-    """Kiểm thử thuật toán DPLL: chọn biến deterministic, branching và backtracking (Task D2)."""
+    """Kiểm thử thuật toán DPLL: chọn biến deterministic, branching và backtracking."""
 
     def setUp(self) -> None:
         self.solver = DPLLSolver()
@@ -421,7 +421,7 @@ class TestDPLLBranchingAndBacktracking(unittest.TestCase):
 
 
 class TestDPLLAssumptionsAndModel(unittest.TestCase):
-    """Kiểm thử DPLL với assumptions và trả kết quả SAT/UNSAT kèm model (Task D3)."""
+    """Kiểm thử DPLL với assumptions và trả kết quả SAT/UNSAT kèm model."""
 
     def setUp(self) -> None:
         self.solver = DPLLSolver()
@@ -608,7 +608,7 @@ class TestDPLLAssumptionsAndModel(unittest.TestCase):
     def test_uniqueness_check_blocks_only_primary_variables(self) -> None:
         """Kiểm tra tính duy nhất của nghiệm puzzle bằng blocking clause trên biến primary.
 
-        Quy ước của Task E4 (uniqueness_check):
+        Quy ước (uniqueness_check):
         Một puzzle có nghiệm duy nhất khi không có nghiệm thứ hai trên các ô của lưới
         (biến primary: 1..num_primary). Biến phụ (auxiliary: > num_primary) chỉ hỗ trợ
         encoding logic, không đại diện cho ô nhân vật. Do đó blocking clause chỉ phủ
@@ -633,7 +633,7 @@ class TestDPLLAssumptionsAndModel(unittest.TestCase):
         res_naive = self.solver.solve(clauses + [naive_blocking], num_vars=num_vars)
         self.assertTrue(res_naive.sat)  # Vẫn SAT vì chỉ khác biến phụ
 
-        # Đúng quy ước Task E4: CHỈ tạo blocking clause trên các biến primary (1..num_primary)
+        #Chỉ tạo blocking clause trên các biến primary (1..num_primary)
         primary_blocking = [
             -var if res1.model[var] else var for var in range(1, num_primary + 1)
         ]
