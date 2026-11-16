@@ -86,10 +86,53 @@ class Encoder:
             return -var
         raise ValueError(f"Status is not valid: {status!r}")
 
+    @staticmethod
+    def _xor_gate(t: int, a: int, b: int) -> List[Clause]:
+        """Bốn clause của t <-> (a XOR b); t được xác định duy nhất bởi a, b"""
+        return [[-t, a, b], [-t, -a, -b], [t, -a, b], [t, a, -b]]
+
+    @staticmethod
+    def _xor_constraint(a: int, b: int, want_odd: bool) -> List[Clause]:
+        """Hai clause ép (a XOR b) = 1 nếu want_odd, ngược lại ép (a XOR b) = 0"""
+        if want_odd:
+            return [[a, b], [-a, -b]]
+        return [[-a, b], [a, -b]]
+
+    def encode_parity(self, clue: Clue) -> List[Clause]:
+        """Encode PARITY: số ô có trạng thái `status` trong vùng là chẵn/lẻ (Extension 1)
+
+        Dùng chuỗi XOR (Tseitin): acc_1 = l_1, acc_i <-> acc_{i-1} XOR l_i, rồi ép acc_m
+        theo parity. Bước cuối ép trực tiếp nên không cần biến phụ riêng.
+        Với m ô trong vùng (m >= 2): m - 2 biến phụ, 4(m - 2) + 2 = 4m - 6 clause.
+        m = 1: 0 biến phụ, 1 clause. m = 8 (neighbors giữa lưới): 6 biến phụ, 26 clause.
+        Mỗi cổng XOR có đủ 4 clause nên biến phụ bị xác định duy nhất bởi biến primary,
+        không làm tăng số model của KB (uniqueness_check không bị ảnh hưởng).
+        count = 0 được coi là chẵn. status = INNOCENT thì literal bị đảo cực.
+        """
+        if clue.type != "PARITY":
+            raise ValueError(f"encode_parity chỉ nhận PARITY, nhận {clue.type!r}")
+        validate_clue(clue, self.n)
+        cells = resolve_region(clue.params["region"], self.n)  # row-major, không trùng
+        status = clue_status(clue)
+        lits = [self.literal_of(cell, status) for cell in cells]
+        want_odd = clue.params["parity"] == "ODD"
+
+        if len(lits) == 1:
+            return [[lits[0]]] if want_odd else [[-lits[0]]]
+
+        clauses: List[Clause] = []
+        acc = lits[0]
+        for lit in lits[1:-1]:
+            t = self.new_aux()
+            clauses.extend(self._xor_gate(t, acc, lit))
+            acc = t
+        clauses.extend(self._xor_constraint(acc, lits[-1], want_odd))
+        return clauses
+
     def encode_clue(self, clue: Clue) -> List[Clause]:
         """
         Đổi một clue sang CNF (FACT, SAME_STATUS, DIFFERENT_STATUS,
-                                  EXACTLY, AT_LEAST, AT_MOST)
+                                  EXACTLY, AT_LEAST, AT_MOST, PARITY)
         """
         validate_clue(clue, self.n)
         if clue.type == "FACT":
@@ -104,7 +147,9 @@ class Encoder:
             return self._encode_at_least(clue)
         if clue.type == "EXACTLY":
             return self._encode_exactly(clue)
-        raise NotImplementedError("C4-C5")
+        if clue.type == "PARITY":
+            return self.encode_parity(clue)
+        raise NotImplementedError("C5")
 
     def _encode_fact(self, clue: Clue) -> List[Clause]:
         """FACT: ô target có trạng thái status  ->  unit clause [±Ci], 0 biến phụ"""
