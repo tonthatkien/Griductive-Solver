@@ -11,10 +11,10 @@ class SolverStats:
     """Thống kê chi tiết trong quá trình giải bài toán SAT.
 
     Thuộc tính:
-        decisions: Số lần chọn biến để rẽ nhánh.
-        propagations: Số literal được suy ra từ các unit clause.
-        backtracks: Số lần quay lui sau khi một nhánh dẫn tới mâu thuẫn.
-        runtime: Tổng thời gian thực thi của thuật toán tính bằng giây (time.perf_counter).
+        decisions: Số lần chọn biến để rẽ nhánh trong _dpll.
+        propagations: Số literal được gán ép buộc qua unit clause, không tính assumptions.
+        backtracks: Số nhánh đệ quy trả về UNSAT.
+        runtime: Thời gian thực thi thực tế tính bằng giây.
     """
 
     decisions: int = 0
@@ -424,6 +424,8 @@ class DPLLSolver:
             assumptions: Danh sách các literal giả định cần cố định giá trị ban đầu.
                 Mặc định là rỗng (hoặc None). Không chèn vào clauses của KB gốc.
             timeout: Thời gian chạy tối đa tính bằng giây. None nghĩa là không giới hạn.
+                Nếu timeout <= 0, trả về ngay TIMEOUT mà không thực thi tìm kiếm.
+                Kiểm tra deadline định kỳ theo lô trong các vòng quét.
 
         Returns:
             SolveResult gồm:
