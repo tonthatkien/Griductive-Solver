@@ -652,7 +652,7 @@ class TestDPLLAssumptionsAndModel(unittest.TestCase):
 
 
 class TestDPLLPhase1Statistics(unittest.TestCase):
-    """Kiểm thử chuẩn hóa bộ đếm thống kê SolverStats (Giai đoạn 1 Task D4).
+    """Kiểm thử chuẩn hóa bộ đếm thống kê SolverStats.
 
     Xác minh đúng đắn của decisions, propagations, backtracks, runtime và tính
     độc lập giữa các lần gọi solve() theo đúng quy ước mã nguồn.
@@ -772,7 +772,7 @@ class TestDPLLPhase1Statistics(unittest.TestCase):
 
 
 class TestDPLLPhase2Timeout(unittest.TestCase):
-    """Kiểm thử cơ chế Timeout định kỳ và các ca biên (Giai đoạn 2 Task D4).
+    """Kiểm thử cơ chế Timeout định kỳ và các ca biên.
 
     Xác minh phát hiện TIMEOUT an toàn, không treo hệ thống, phân biệt với UNSAT,
     chặn đúng các ca stress tổ hợp và bảo đảm cô lập trạng thái khi tái sử dụng.
@@ -858,7 +858,7 @@ class TestDPLLPhase2Timeout(unittest.TestCase):
 
 
 class TestDPLLPhase3Entailment(unittest.TestCase):
-    """Kiểm thử suy diễn logic và ví dụ mẫu trong đề bài (Giai đoạn 3 Task D4).
+    """Kiểm thử suy diễn logic và ví dụ mẫu trong đề bài.
 
     Ví dụ: KB = (A ∨ B) ∧ (¬A ∨ B), chứng minh B là Criminal qua phản chứng KB ∧ ¬B UNSAT,
     xác nhận A là UNKNOWN qua 2 truy vấn SAT, và kiểm tra không phát sinh rẽ nhánh.
@@ -966,9 +966,9 @@ class TestDPLLPhase3Entailment(unittest.TestCase):
 
 
 class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
-    """Kiểm chứng chéo toàn diện giữa DPLL và Brute Force (Giai đoạn 4 Task D4).
+    """Kiểm chứng chéo toàn diện giữa DPLL và Brute Force.
 
-    Tập trung vào tính đúng đắn (Soundness & Completeness):
+    Tập trung vào tính đúng đắn:
     1. So sánh 1:1 trên 300 công thức ngẫu nhiên có seed cố định (1..7 biến, 0..25 mệnh đề).
     2. Kiểm chứng nghiệm model thỏa mãn 100% mệnh đề khi SAT.
     3. Thử nghiệm tích hợp nhỏ với các mẫu CNF sinh từ clue cơ bản (FACT, SAME, DIFFERENT).
