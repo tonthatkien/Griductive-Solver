@@ -857,5 +857,113 @@ class TestDPLLPhase2Timeout(unittest.TestCase):
         self.assertGreater(res.stats.runtime, 0.0)
 
 
+class TestDPLLPhase3Entailment(unittest.TestCase):
+    """Kiểm thử suy diễn logic và ví dụ mẫu trong đề bài (Giai đoạn 3 Task D4).
+
+    Ví dụ: KB = (A ∨ B) ∧ (¬A ∨ B), chứng minh B là Criminal qua phản chứng KB ∧ ¬B UNSAT,
+    xác nhận A là UNKNOWN qua 2 truy vấn SAT, và kiểm tra không phát sinh rẽ nhánh.
+    """
+
+    def setUp(self) -> None:
+        self.solver = DPLLSolver()
+
+    def test_spec_kb_proves_criminal_without_branching(self) -> None:
+        """KB ∧ ¬B vô nghiệm chứng minh B Criminal; hoàn tất bằng unit propagate."""
+        # A = 1, B = 2
+        kb = [[1, 2], [-1, 2]]
+
+        # Giả định B = Innocent (¬B, literal -2)
+        res_refutation = self.solver.solve(kb, num_vars=2, assumptions=[-2])
+        self.assertFalse(res_refutation.sat)
+        self.assertIsNone(res_refutation.model)
+        self.assertFalse(res_refutation.timed_out)
+
+        # Suy diễn phản chứng hoàn tất mà không cần rẽ nhánh hay quay lui
+        self.assertEqual(res_refutation.stats.decisions, 0)
+        self.assertEqual(res_refutation.stats.backtracks, 0)
+
+        # Ngược lại KB ∧ B thỏa mãn
+        res_b = self.solver.solve(kb, num_vars=2, assumptions=[2])
+        self.assertTrue(res_b.sat)
+        self.assertIsNotNone(res_b.model)
+        assert res_b.model is not None
+        self.assertTrue(res_b.model[2])
+
+    def test_spec_kb_classifies_a_as_unknown(self) -> None:
+        """Cả KB ∧ A và KB ∧ ¬A đều thỏa mãn nên A là UNKNOWN."""
+        kb = [[1, 2], [-1, 2]]
+
+        # Thử A = Criminal (literal 1) -> SAT với B = True
+        res_pos = self.solver.solve(kb, num_vars=2, assumptions=[1])
+        self.assertTrue(res_pos.sat)
+        self.assertIsNotNone(res_pos.model)
+        assert res_pos.model is not None
+        self.assertTrue(res_pos.model[1])
+        self.assertTrue(res_pos.model[2])
+
+        # Thử A = Innocent (literal -1) -> SAT với B = True
+        res_neg = self.solver.solve(kb, num_vars=2, assumptions=[-1])
+        self.assertTrue(res_neg.sat)
+        self.assertIsNotNone(res_neg.model)
+        assert res_neg.model is not None
+        self.assertFalse(res_neg.model[1])
+        self.assertTrue(res_neg.model[2])
+
+    def test_refutation_proves_innocent_without_branching(self) -> None:
+        """Chứng minh Innocent qua phản chứng KB ∧ C_i UNSAT với decisions=0."""
+        # KB = (A ∨ ¬B) ∧ (¬A ∨ ¬B) với A = 1, B = 2
+        kb_innocent = [[1, -2], [-1, -2]]
+
+        # Giả định B = Criminal (literal 2) -> mâu thuẫn trực tiếp qua unit propagate
+        res_criminal = self.solver.solve(kb_innocent, num_vars=2, assumptions=[2])
+        self.assertFalse(res_criminal.sat)
+        self.assertIsNone(res_criminal.model)
+        self.assertFalse(res_criminal.timed_out)
+        self.assertEqual(res_criminal.stats.decisions, 0)
+        self.assertEqual(res_criminal.stats.backtracks, 0)
+
+        # Giả định B = Innocent (literal -2) -> SAT
+        res_innocent = self.solver.solve(kb_innocent, num_vars=2, assumptions=[-2])
+        self.assertTrue(res_innocent.sat)
+        self.assertIsNotNone(res_innocent.model)
+        assert res_innocent.model is not None
+        self.assertFalse(res_innocent.model[2])
+
+    def test_inconsistent_kb_detected_without_branching(self) -> None:
+        """KB mâu thuẫn [[1], [-1]] trả về UNSAT với decisions=0, backtracks=0."""
+        res = self.solver.solve([[1], [-1]], num_vars=1)
+        self.assertFalse(res.sat)
+        self.assertIsNone(res.model)
+        self.assertFalse(res.timed_out)
+        self.assertEqual(res.stats.decisions, 0)
+        self.assertEqual(res.stats.backtracks, 0)
+
+    def test_all_models_of_spec_kb_force_criminal_b(self) -> None:
+        """Toàn bộ model của KB đều có B=True; không tồn tại model nào có B=False."""
+        kb = [[1, 2], [-1, 2]]
+
+        # Model 1
+        res1 = self.solver.solve(kb, num_vars=2)
+        self.assertTrue(res1.sat)
+        self.assertIsNotNone(res1.model)
+        assert res1.model is not None
+        self.assertTrue(res1.model[2])
+
+        # Chặn model 1 để tìm model 2
+        block1 = [-1 if res1.model[1] else 1, -2]
+        res2 = self.solver.solve(kb + [block1], num_vars=2)
+        self.assertTrue(res2.sat)
+        self.assertIsNotNone(res2.model)
+        assert res2.model is not None
+        self.assertTrue(res2.model[2])
+        self.assertNotEqual(res1.model[1], res2.model[1])
+
+        # Chặn cả 2 model -> không còn model nào khác (UNSAT)
+        block2 = [-1 if res2.model[1] else 1, -2]
+        res3 = self.solver.solve(kb + [block1, block2], num_vars=2)
+        self.assertFalse(res3.sat)
+        self.assertIsNone(res3.model)
+
+
 if __name__ == "__main__":
     unittest.main()
