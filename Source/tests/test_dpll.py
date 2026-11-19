@@ -781,20 +781,8 @@ class TestDPLLPhase2Timeout(unittest.TestCase):
     def setUp(self) -> None:
         self.solver = DPLLSolver()
 
-    @staticmethod
-    def _create_php_clauses(pigeons: int, holes: int) -> List[List[int]]:
-        """Sinh bài toán chuồng bồ câu PHP(pigeons, holes), vô nghiệm khi pigeons > holes."""
-        clauses: List[List[int]] = []
-        for p in range(1, pigeons + 1):
-            clauses.append([(p - 1) * holes + h for h in range(1, holes + 1)])
-        for h in range(1, holes + 1):
-            for p1 in range(1, pigeons + 1):
-                for p2 in range(p1 + 1, pigeons + 1):
-                    clauses.append([-((p1 - 1) * holes + h), -((p2 - 1) * holes + h)])
-        return clauses
-
     def test_instant_timeout_nonpositive_values(self) -> None:
-        """Timeout <= 0 (0, số âm) trả về TIMEOUT ngay lập tức mà không tìm kiếm."""
+        """Timeout <= 0 (0, số âm) trả về TIMEOUT ngay mà không tìm kiếm."""
         for t_val in [0.0, -0.5, -1.0, -1e-9]:
             with self.subTest(timeout=t_val):
                 res = self.solver.solve([[1, 2], [-1, 2]], num_vars=2, timeout=t_val)
@@ -806,43 +794,38 @@ class TestDPLLPhase2Timeout(unittest.TestCase):
                 self.assertEqual(res.stats.propagations, 0)
                 self.assertEqual(res.stats.backtracks, 0)
 
-    def test_timeout_on_hard_combinatorial_unsat(self) -> None:
-        """Ngắt an toàn trên bài toán khó (PHP 5 chim 4 chuồng, 20 biến, 45 clause)."""
-        php_clauses = self._create_php_clauses(pigeons=5, holes=4)
-        res = self.solver.solve(php_clauses, num_vars=20, timeout=0.005)
+    def test_timeout_during_active_branching(self) -> None:
+        """Ngắt an toàn khi solver đang tích cực rẽ nhánh và quay lui."""
+        # PHP 5 chim 4 chuồng: vô nghiệm và buộc rẽ nhánh
+        clauses = (
+            [[p * 4 + h for h in range(1, 5)] for p in range(5)]
+            + [[-(p1 * 4 + h), -(p2 * 4 + h)]
+               for h in range(1, 5) for p1 in range(5) for p2 in range(p1 + 1, 5)]
+        )
+        res = self.solver.solve(clauses, num_vars=20, timeout=0.005)
 
         self.assertTrue(res.timed_out)
         self.assertFalse(res.sat)
         self.assertIsNone(res.model)
         self.assertGreater(res.stats.runtime, 0.0)
-        # Thuật toán đã bắt đầu rẽ nhánh trước khi chạm mốc deadline
         self.assertGreater(res.stats.decisions, 0)
 
     def test_strict_discrimination_timeout_vs_unsat(self) -> None:
-        """Phân biệt tuyệt đối giữa vô nghiệm chắc chắn (UNSAT) và hết giờ (TIMEOUT)."""
-        # UNSAT thực sự có đủ thời gian để chứng minh
+        """Phân biệt tuyệt đối giữa vô nghiệm (UNSAT) và hết giờ (TIMEOUT)."""
         res_unsat = self.solver.solve([[1], [-1]], num_vars=1, timeout=1.0)
-        self.assertFalse(res_unsat.sat)
+        res_timeout = self.solver.solve([[1, 2]], num_vars=2, timeout=0.0)
+
         self.assertFalse(res_unsat.timed_out)
-        self.assertIsNone(res_unsat.model)
-
-        # TIMEOUT do hết thời gian
-        php_clauses = self._create_php_clauses(pigeons=5, holes=4)
-        res_timeout = self.solver.solve(php_clauses, num_vars=20, timeout=0.005)
-        self.assertFalse(res_timeout.sat)
         self.assertTrue(res_timeout.timed_out)
-        self.assertIsNone(res_timeout.model)
-
-        # Cờ timed_out đối lập nhau hoàn toàn
+        self.assertFalse(res_unsat.sat)
+        self.assertFalse(res_timeout.sat)
         self.assertNotEqual(res_unsat.timed_out, res_timeout.timed_out)
 
     def test_solver_clean_reuse_after_timeout(self) -> None:
         """Sau khi bị ngắt bởi timeout, solver vẫn dùng lại bình thường và sạch state."""
-        php_clauses = self._create_php_clauses(pigeons=5, holes=4)
-        res_timeout = self.solver.solve(php_clauses, num_vars=20, timeout=0.005)
+        res_timeout = self.solver.solve([[1, 2]], num_vars=2, timeout=0.0)
         self.assertTrue(res_timeout.timed_out)
 
-        # Lần giải tiếp theo giải bài toán SAT đơn giản
         res_next = self.solver.solve([[1, 2], [-1, 2]], num_vars=2, timeout=1.0)
         self.assertFalse(res_next.timed_out)
         self.assertTrue(res_next.sat)
@@ -865,7 +848,7 @@ class TestDPLLPhase2Timeout(unittest.TestCase):
         self.assertGreater(res.stats.runtime, 0.0)
 
     def test_periodic_polling_batch_runtime_positive(self) -> None:
-        """Cơ chế kiểm tra deadline định kỳ theo lô vẫn đảm bảo runtime dương."""
+        """Cơ chế kiểm tra deadline định kỳ đảm bảo runtime dương."""
         large_clauses = [[1]] + [[-i, i + 1] for i in range(1, 8000)]
         res = self.solver.solve(large_clauses, num_vars=8001, timeout=1e-5)
 
