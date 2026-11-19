@@ -965,5 +965,91 @@ class TestDPLLPhase3Entailment(unittest.TestCase):
         self.assertIsNone(res3.model)
 
 
+class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
+    """Kiểm chứng chéo toàn diện giữa DPLL và Brute Force (Giai đoạn 4 Task D4).
+
+    Tập trung vào tính đúng đắn (Soundness & Completeness):
+    1. So sánh 1:1 trên 300 công thức ngẫu nhiên có seed cố định (1..7 biến, 0..25 mệnh đề).
+    2. Kiểm chứng nghiệm model thỏa mãn 100% mệnh đề khi SAT.
+    3. Thử nghiệm tích hợp nhỏ với các mẫu CNF sinh từ clue cơ bản (FACT, SAME, DIFFERENT).
+    4. Xác minh sự trùng khớp khi công thức có nghiệm duy nhất.
+    """
+
+    def setUp(self) -> None:
+        self.solver = DPLLSolver()
+
+    def test_random_cnf_cross_validation_300(self) -> None:
+        """Đối chiếu DPLL với Brute Force trên 300 CNF ngẫu nhiên (seed cố định)."""
+        import itertools
+        import random
+
+        rng = random.Random(2026)
+        for idx in range(300):
+            n = rng.randint(1, 7)
+            m = rng.randint(0, 25)
+            clauses = [
+                [rng.choice([-1, 1]) * rng.randint(1, n) for _ in range(rng.randint(1, 3))]
+                for _ in range(m)
+            ]
+
+            def _sat_under(assignment: Tuple[bool, ...]) -> bool:
+                return all(
+                    any(assignment[abs(lit) - 1] == (lit > 0) for lit in clause)
+                    for clause in clauses
+                )
+
+            expected_sat = any(
+                _sat_under(a) for a in itertools.product([False, True], repeat=n)
+            )
+            res = self.solver.solve(clauses, num_vars=n)
+
+            self.assertEqual(
+                res.sat,
+                expected_sat,
+                f"Lệch kết quả tại test #{idx} với n={n}, clauses={clauses}",
+            )
+
+            # Nếu SAT, model phải đầy đủ và thỏa mãn tất cả mệnh đề
+            if res.sat:
+                self.assertIsNotNone(res.model)
+                assert res.model is not None
+                self.assertEqual(set(res.model.keys()), set(range(1, n + 1)))
+                self.assertTrue(
+                    all(self.solver.is_clause_satisfied(c, res.model) for c in clauses)
+                )
+
+    def test_basic_clue_cnf_patterns_against_brute_force(self) -> None:
+        """Kiểm chứng tích hợp mẫu CNF cơ bản (FACT, SAME, DIFFERENT) với Brute Force."""
+        import itertools
+
+        # 4 biến tương ứng lưới 2x2: FACT(1), SAME(1, 2), DIFFERENT(2, 3)
+        clauses = [[1], [-1, 2], [1, -2], [2, 3], [-2, -3]]
+        n = 4
+
+        def _sat_under(a: Tuple[bool, ...]) -> bool:
+            return all(any(a[abs(lit) - 1] == (lit > 0) for lit in c) for c in clauses)
+
+        bf_models = [a for a in itertools.product([False, True], repeat=n) if _sat_under(a)]
+        self.assertEqual(len(bf_models), 2)
+
+        res = self.solver.solve(clauses, num_vars=n)
+        self.assertTrue(res.sat)
+        self.assertIsNotNone(res.model)
+        assert res.model is not None
+
+        # Model tìm được bởi DPLL phải nằm trong danh sách nghiệm vét cạn
+        model_tuple = tuple(res.model[i] for i in range(1, n + 1))
+        self.assertIn(model_tuple, bf_models)
+
+    def test_unique_solution_matches_brute_force(self) -> None:
+        """Khi công thức có đúng 1 nghiệm theo Brute Force, DPLL tìm ra đúng nghiệm đó."""
+        # Ràng buộc cố định cả 4 biến: 1=True, 2=False, 3=True, 4=False
+        clauses = [[1], [-2], [3], [-4]]
+        res = self.solver.solve(clauses, num_vars=4)
+
+        self.assertTrue(res.sat)
+        self.assertEqual(res.model, {1: True, 2: False, 3: True, 4: False})
+
+
 if __name__ == "__main__":
     unittest.main()
