@@ -30,6 +30,9 @@ def satisfiable_given(clauses, fixed):
     """Lan truyền unit từ phép gán primary; biến phụ bị ép hoàn toàn nên đủ để kết luận.
 
     Không gọi DPLL để test này độc lập với module D.
+    Chỉ đúng vì encoder dùng ⇔ (mỗi biến phụ được xác định duy nhất bởi biến primary).
+    Nếu encoding đổi sang ⇒ một chiều, biến phụ có thể tự do và hàm này có thể trả
+    True dù CNF thực ra UNSAT (test sẽ báo lệch giả).
     """
     assignment = dict(fixed)
     changed = True
@@ -70,7 +73,8 @@ class TestEncodeCompare(unittest.TestCase):
     def test_aux_vars_come_after_primary_and_are_counted(self):
         enc = Encoder(N)
         clauses = enc._encode_compare(make_compare("row1", "colA", "GT", "CRIMINAL"))
-        self.assertEqual(enc.num_aux, 12)                     # 3*4/2 mỗi vùng, hai vùng
+        # mỗi vùng |R| ô dùng |R|(|R|+1)/2 biến phụ: 2 vùng x (3*4/2) = 12
+        self.assertEqual(enc.num_aux, 2 * (3 * 4 // 2))
         used = {abs(lit) for clause in clauses for lit in clause}
         aux_used = {v for v in used if v > N * N}
         self.assertEqual(aux_used, set(range(board.first_aux_var(N), board.first_aux_var(N) + 12)))
