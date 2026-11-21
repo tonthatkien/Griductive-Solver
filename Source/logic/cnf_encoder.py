@@ -62,6 +62,15 @@ class KB:
 class Encoder:
     """Đổi clue sang CNF; biến phụ được cấp tách riêng khỏi biến primary"""
 
+    # (đảo hai vùng?, strict?) cho từng phép so sánh; EQ = GE ∧ LE
+    _COMPARE_PLAN = {
+        "GE": [(False, False)],
+        "GT": [(False, True)],
+        "LE": [(True, False)],
+        "LT": [(True, True)],
+        "EQ": [(False, False), (True, False)],
+    }
+
     def __init__(self, n: int):
         self.n = n
         self._next_aux = board.first_aux_var(n)
@@ -238,29 +247,24 @@ class Encoder:
           1. Mỗi vùng R có bộ đếm out[j] <=> "ít nhất j ô của R có trạng thái status" (j = 1..|R|).
              Dùng s[i][j] <=> s[i-1][j] v (x_i ^ s[i-1][j-1]), s[0][0] = True, s[i][j>i] = False.
              Biến phụ: i*(i+1)/2 cho mỗi vùng (i chạy 1..|R|)  -> |R|(|R|+1)/2.
-          2. GE: mọi j: (count2 >= j) -> (count1 >= j).  GT: mọi j >= 0: (count2 >= j) -> (count1 >= j+1).
+          2. GE: mọi j: (count2 >= j) -> (count1 >= j).
+             GT: mọi j >= 0: (count2 >= j) -> (count1 >= j+1).
              LE, LT: đổi chỗ hai vùng. EQ = GE ^ LE.
         Số clause ~ 4 * |R|(|R|+1)/2 cho mỗi bộ đếm, cộng thêm O(|R1| + |R2|) clause nối.
         Hai vùng chồng nhau vẫn đúng vì mỗi bộ đếm đếm riêng theo literal của ô.
         """
         validate_clue(clue, self.n)
+        plan = self._COMPARE_PLAN.get(clue.params["op"])
+        if plan is None:  # phòng thủ: kiểm trước khi cấp aux
+            raise ValueError(f"COMPARE: op không hợp lệ: {clue.params['op']!r}")
         status = clue_status(clue)
         out1, clauses1 = self._unary_counter(self._region_literals(clue.params["region1"], status))
         out2, clauses2 = self._unary_counter(self._region_literals(clue.params["region2"], status))
-        counters = clauses1 + clauses2
-        op = clue.params["op"]
-        if op == "GE":
-            return counters + self._at_least_as_many(out1, out2, strict=False)
-        if op == "GT":
-            return counters + self._at_least_as_many(out1, out2, strict=True)
-        if op == "LE":
-            return counters + self._at_least_as_many(out2, out1, strict=False)
-        if op == "LT":
-            return counters + self._at_least_as_many(out2, out1, strict=True)
-        if op == "EQ":
-            return (counters + self._at_least_as_many(out1, out2, strict=False)
-                    + self._at_least_as_many(out2, out1, strict=False))
-        raise ValueError(f"COMPARE: op không hợp lệ: {op!r}")
+        clauses = clauses1 + clauses2
+        for swap, strict in plan:
+            big, small = (out2, out1) if swap else (out1, out2)
+            clauses += self._at_least_as_many(big, small, strict)
+        return clauses
 
     def _region_literals(self, region: dict, status: str) -> List[int]:
         """Literal của các ô trong vùng (row-major): +var nếu CRIMINAL, -var nếu INNOCENT."""
@@ -274,7 +278,7 @@ class Encoder:
         return [x for x in items if x is not False]
 
     def _unary_counter(self, lits: List[int]) -> Tuple[List[int], List[Clause]]:
-        """Bộ đếm unary: trả (out, clauses) với out[j-1] <=> có ít nhất j literal trong lits đúng."""
+        """Bộ đếm unary: trả (out, clauses) với out[j-1] <=> có ít nhất j literal trong lits đúng"""
         clauses: List[Clause] = []
         prev: List[int] = []          # prev[j-1] = s[i-1][j]
         for i, x in enumerate(lits, start=1):

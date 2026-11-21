@@ -17,8 +17,12 @@ REGIONS = {
     "nei_A1": {"type": "neighbors", "cell": "A1"},
     "one_cell": {"type": "list", "cells": ["C3"]},
 }
+EMPTY_REGION = {"type": "list", "cells": []}   # không hợp lệ, chỉ dùng test bị từ chối
+
 PAIRS = [("row1", "colA"), ("nei_B2", "row1"), ("nei_A1", "nei_B2"),
-         ("one_cell", "colA"), ("row1", "row1")]    # có cặp chồng nhau và cặp trùng hẳn
+         ("one_cell", "colA"), ("row1", "row1"),
+         ("one_cell", "one_cell"),   # biên: hai vùng 1 ô, EQ với chính nó
+         ("row1", "one_cell")]       # biên: vùng 1 ô làm vế phải
 
 
 def make_compare(r1: str, r2: str, op: str, status: str) -> Clue:
@@ -132,6 +136,17 @@ class TestEncodeCompare(unittest.TestCase):
                 with self.subTest(r1=r1, r2=r2, op=op, status=status):
                     self.assertEqual(satisfiable_given(clauses, fixed),
                                      evaluate(clue, assignment, n))
+
+    def test_empty_region_is_rejected_without_allocating_aux(self):
+        for side in ("region1", "region2"):
+            with self.subTest(side=side):
+                good = make_compare("row1", "colA", "GT", "CRIMINAL")
+                bad = Clue(id=good.id, owner=good.owner, type="COMPARE",
+                           params={**good.params, side: EMPTY_REGION})
+                enc = Encoder(N)
+                with self.assertRaises(ValueError):
+                    enc.encode_clue(bad)
+                self.assertEqual(enc.num_aux, 0)
 
 
 if __name__ == "__main__":
