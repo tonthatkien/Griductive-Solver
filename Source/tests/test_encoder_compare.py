@@ -30,13 +30,13 @@ def make_compare(r1: str, r2: str, op: str, status: str) -> Clue:
     return Clue(id="clue_A1", owner="A1", type="COMPARE", params=params)
 
 
-def satisfiable_given(clauses, fixed):
-    """Lan truyền unit từ phép gán primary; biến phụ bị ép hoàn toàn nên đủ để kết luận.
+def propagate(clauses, fixed):
+    """Lan truyền unit từ phép gán primary. Trả (ok, assignment đã lan truyền).
 
-    Không gọi DPLL để test này độc lập với module D.
-    Chỉ đúng vì encoder dùng ⇔ (mỗi biến phụ được xác định duy nhất bởi biến primary).
-    Nếu encoding đổi sang ⇒ một chiều, biến phụ có thể tự do và hàm này có thể trả
-    True dù CNF thực ra UNSAT (test sẽ báo lệch giả).
+    ok=False: gặp clause bị vi phạm hoàn toàn -> CNF chắc chắn UNSAT với phép gán này.
+    ok=True : không xung đột; test gọi phải tự kiểm tra mọi biến đã bị ép
+              (nếu còn biến phụ tự do thì kết luận SAT chưa chắc đúng).
+    Không gọi DPLL để test độc lập với module D.
     """
     assignment = dict(fixed)
     changed = True
@@ -47,11 +47,11 @@ def satisfiable_given(clauses, fixed):
                 continue
             free = [lit for lit in clause if abs(lit) not in assignment]
             if not free:
-                return False
+                return False, assignment
             if len(free) == 1:
                 assignment[abs(free[0])] = free[0] > 0
                 changed = True
-    return True
+    return True, assignment
 
 
 class TestEncodeCompare(unittest.TestCase):
@@ -59,13 +59,18 @@ class TestEncodeCompare(unittest.TestCase):
         cells = board.all_cells(N)
         for (r1, r2), op, status in itertools.product(PAIRS, OPS, ("CRIMINAL", "INNOCENT")):
             clue = make_compare(r1, r2, op, status)
-            clauses = Encoder(N)._encode_compare(clue)
+            enc = Encoder(N)
+            clauses = enc._encode_compare(clue)
+            all_vars = set(range(1, N * N + enc.num_aux + 1))
             for bits in itertools.product((False, True), repeat=len(cells)):
                 assignment = dict(zip(cells, bits))
                 fixed = {board.var_of(c, N): v for c, v in assignment.items()}
                 with self.subTest(r1=r1, r2=r2, op=op, status=status, bits=bits):
-                    self.assertEqual(satisfiable_given(clauses, fixed),
-                                     evaluate(clue, assignment, N))
+                    ok, full = propagate(clauses, fixed)
+                    self.assertEqual(ok, evaluate(clue, assignment, N))
+                    if ok:
+                        # mọi biến phụ bị ép -> chỉ có đúng 1 mở rộng
+                        self.assertEqual(set(full), all_vars)
 
     def test_status_defaults_to_criminal(self):
         with_status = make_compare("row1", "colA", "GT", "CRIMINAL")
@@ -129,13 +134,17 @@ class TestEncodeCompare(unittest.TestCase):
             clue = Clue(id="clue_A1", owner="A1", type="COMPARE",
                         params=dict(region1=regions[r1], region2=regions[r2],
                                     op=op, status=status))
-            clauses = Encoder(n)._encode_compare(clue)
+            enc = Encoder(n)  # tạo NGOÀI vòng 200 lần
+            clauses = enc._encode_compare(clue)
+            all_vars = set(range(1, n * n + enc.num_aux + 1))
             for _ in range(200):
                 assignment = {c: rng.random() < 0.5 for c in cells}
                 fixed = {board.var_of(c, n): v for c, v in assignment.items()}
                 with self.subTest(r1=r1, r2=r2, op=op, status=status):
-                    self.assertEqual(satisfiable_given(clauses, fixed),
-                                     evaluate(clue, assignment, n))
+                    ok, full = propagate(clauses, fixed)
+                    self.assertEqual(ok, evaluate(clue, assignment, n))
+                    if ok:
+                        self.assertEqual(set(full), all_vars)
 
     def test_empty_region_is_rejected_without_allocating_aux(self):
         for side in ("region1", "region2"):

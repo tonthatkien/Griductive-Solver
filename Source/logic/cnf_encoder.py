@@ -250,7 +250,9 @@ class Encoder:
           2. GE: mọi j: (count2 >= j) -> (count1 >= j).
              GT: mọi j >= 0: (count2 >= j) -> (count1 >= j+1).
              LE, LT: đổi chỗ hai vùng. EQ = GE ^ LE.
-        Số clause ~ 4 * |R|(|R|+1)/2 cho mỗi bộ đếm, cộng thêm O(|R1| + |R2|) clause nối.
+        Số clause: đúng 2|R|² cho mỗi bộ đếm (sau khi rút gọn hằng), cộng clause nối.
+        Với _at_least_as_many, GE có |small| clause nối, GT có |small| + 1
+        (small là bộ đếm đóng vai vế nhỏ sau khi đổi chỗ); EQ = GE + LE.
         Hai vùng chồng nhau vẫn đúng vì mỗi bộ đếm đếm riêng theo literal của ô.
         """
         validate_clue(clue, self.n)
