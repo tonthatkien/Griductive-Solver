@@ -969,23 +969,20 @@ class TestDPLLPhase3Entailment(unittest.TestCase):
 
 
 class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
-    """Kiểm chứng chéo toàn diện giữa DPLL và Brute Force.
+    """Kiểm chứng chéo toàn diện giữa DPLL và Brute Force / Semantic Evaluator.
 
-    Tập trung vào tính đúng đắn:
-    1. So sánh 1:1 trên 300 công thức ngẫu nhiên có seed cố định (1..7 biến, 0..25 mệnh đề).
-    2. Kiểm chứng nghiệm model thỏa mãn 100% mệnh đề khi SAT.
-    3. Thử nghiệm tích hợp nhỏ với các mẫu CNF sinh từ clue cơ bản (FACT, SAME, DIFFERENT).
-    4. Xác minh sự trùng khớp khi công thức có nghiệm duy nhất.
+    Ranh giới kiểm thử: "D4 CNF thuần; C7 kiểm tra semantic ↔ encoder".
+    - D4 kiểm thử thuật toán DPLL: đối chiếu vét cạn chân trị CNF ngẫu nhiên và
+      kiểm chứng chéo với logic.semantic.evaluate_all trên các clue cơ bản.
+    - C7 (tests/test_encoder_vs_semantic.py) phụ trách kiểm thử toàn diện
+      đối chiếu giữa CNF Encoder và Semantic Evaluator cho mọi loại clue.
     """
 
     def setUp(self) -> None:
         self.solver = DPLLSolver()
 
     def test_random_cnf_cross_validation_300(self) -> None:
-        """Đối chiếu DPLL với Brute Force trên 300 CNF ngẫu nhiên (seed cố định).
-
-        Ghi chú: D4 test thuần CNF độc lập với game domain; C7 sẽ test semantic ↔ encoder.
-        """
+        """Đối chiếu DPLL với Brute Force trên 300 CNF ngẫu nhiên (seed cố định)."""
         import itertools
         import random
 
@@ -998,6 +995,10 @@ class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
                 for _ in range(m)
             ]
 
+            # Ranh giới kiểm thử: "D4 CNF thuần; C7 kiểm tra semantic ↔ encoder".
+            # Công thức ở đây là CNF ngẫu nhiên trừu tượng (biến số 1..n, không gắn với
+            # lưới hay clue cụ thể nào), nên không thể dùng semantic.evaluate.
+            # Hàm _sat_under kiểm tra chân trị mệnh đề độc lập để vét cạn nghiệm chuẩn.
             def _sat_under(assignment: Tuple[bool, ...]) -> bool:
                 return all(
                     any(assignment[abs(lit) - 1] == (lit > 0) for lit in clause)
@@ -1025,27 +1026,70 @@ class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
                 )
 
     def test_basic_clue_cnf_patterns_against_brute_force(self) -> None:
-        """Kiểm chứng tích hợp mẫu CNF cơ bản (FACT, SAME, DIFFERENT) với Brute Force."""
+        """Kiểm chứng tích hợp mẫu CNF cơ bản (FACT, SAME, DIFFERENT) với semantic evaluator."""
         import itertools
+        from engine.board import cell_of_var
+        from engine.clue import Clue
+        from logic.semantic import evaluate_all
 
-        # 4 biến tương ứng lưới 2x2: FACT(1), SAME(1, 2), DIFFERENT(2, 3)
+        # Ranh giới kiểm thử: "D4 CNF thuần; C7 kiểm tra semantic ↔ encoder".
+        # Ở đây D4 dùng semantic.evaluate_all để kiểm chứng chéo 2 module độc lập
+        # (DPLLSolver và semantic evaluator) trên các clue cơ bản.
+        # Task C7 (tests/test_encoder_vs_semantic.py) sẽ kiểm tra toàn diện
+        # sự tương đương giữa CNF Encoder và Semantic Evaluator cho mọi loại clue.
+        board_size = 2
+        n = board_size * board_size  # 4 biến tương ứng lưới 2x2: A1, B1, A2, B2
+        clues = [
+            Clue(
+                id="c1",
+                owner="A1",
+                type="FACT",
+                params={"target": "A1", "status": "CRIMINAL"},
+            ),
+            Clue(
+                id="c2",
+                owner="A1",
+                type="SAME_STATUS",
+                params={"cell1": "A1", "cell2": "B1"},
+            ),
+            Clue(
+                id="c3",
+                owner="A1",
+                type="DIFFERENT_STATUS",
+                params={"cell1": "B1", "cell2": "A2"},
+            ),
+        ]
+
+        # Mệnh đề CNF tương ứng:
+        # FACT(A1) -> [1]
+        # SAME(A1, B1) -> [-1, 2], [1, -2]
+        # DIFFERENT(B1, A2) -> [2, 3], [-2, -3]
         clauses = [[1], [-1, 2], [1, -2], [2, 3], [-2, -3]]
-        n = 4
 
-        def _sat_under(a: Tuple[bool, ...]) -> bool:
-            return all(any(a[abs(lit) - 1] == (lit > 0) for lit in c) for c in clauses)
+        # Vét cạn tất cả cấu hình ô cờ bằng logic.semantic.evaluate_all (thay vì tự viết hàm)
+        cells = [cell_of_var(v, board_size) for v in range(1, n + 1)]
+        semantic_models = [
+            dict(zip(cells, a))
+            for a in itertools.product([False, True], repeat=n)
+            if evaluate_all(clues, dict(zip(cells, a)), board_size)
+        ]
+        self.assertEqual(len(semantic_models), 2)
 
-        bf_models = [a for a in itertools.product([False, True], repeat=n) if _sat_under(a)]
-        self.assertEqual(len(bf_models), 2)
-
+        # Giải CNF bằng DPLLSolver
         res = self.solver.solve(clauses, num_vars=n)
         self.assertTrue(res.sat)
         self.assertIsNotNone(res.model)
         assert res.model is not None
 
-        # Model tìm được bởi DPLL phải nằm trong danh sách nghiệm vét cạn
-        model_tuple = tuple(res.model[i] for i in range(1, n + 1))
-        self.assertIn(model_tuple, bf_models)
+        # Model tìm được bởi DPLL phải thỏa mãn semantic evaluator
+        dpll_cell_assignment = {
+            cell_of_var(var, board_size): val for var, val in res.model.items()
+        }
+        self.assertTrue(
+            evaluate_all(clues, dpll_cell_assignment, board_size),
+            "Nghiệm do DPLL tìm ra không thỏa mãn logic.semantic.evaluate_all",
+        )
+        self.assertIn(dpll_cell_assignment, semantic_models)
 
     def test_unique_solution_matches_brute_force(self) -> None:
         """Khi công thức có đúng 1 nghiệm theo Brute Force, DPLL tìm ra đúng nghiệm đó."""
