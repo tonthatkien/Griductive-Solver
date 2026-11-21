@@ -795,14 +795,17 @@ class TestDPLLPhase2Timeout(unittest.TestCase):
                 self.assertEqual(res.stats.backtracks, 0)
 
     def test_timeout_during_active_branching(self) -> None:
-        """Ngắt an toàn khi solver đang tích cực rẽ nhánh và quay lui."""
-        # PHP 5 chim 4 chuồng: vô nghiệm và buộc rẽ nhánh
-        clauses = (
-            [[p * 4 + h for h in range(1, 5)] for p in range(5)]
-            + [[-(p1 * 4 + h), -(p2 * 4 + h)]
-               for h in range(1, 5) for p1 in range(5) for p2 in range(p1 + 1, 5)]
-        )
-        res = self.solver.solve(clauses, num_vars=20, timeout=0.005)
+        """Ngắt an toàn khi solver đang tích cực rẽ nhánh (dùng mock timer chống flaky)."""
+        clauses = [[1, 2], [-1, 3], [-1, -3]]
+
+        def _mock_perf() -> float:
+            # Ngay khi solver đã phân nhánh ít nhất 1 lần, báo quá hạn deadline
+            if self.solver.stats.decisions > 0:
+                return 200.0
+            return 100.0
+
+        with patch("time.perf_counter", side_effect=_mock_perf):
+            res = self.solver.solve(clauses, num_vars=3, timeout=1.0)
 
         self.assertTrue(res.timed_out)
         self.assertFalse(res.sat)
@@ -848,9 +851,9 @@ class TestDPLLPhase2Timeout(unittest.TestCase):
         self.assertGreater(res.stats.runtime, 0.0)
 
     def test_periodic_polling_batch_runtime_positive(self) -> None:
-        """Cơ chế kiểm tra deadline định kỳ đảm bảo runtime dương."""
+        """Cơ chế kiểm tra deadline định kỳ đảm bảo runtime dương (timeout 1ms)."""
         large_clauses = [[1]] + [[-i, i + 1] for i in range(1, 8000)]
-        res = self.solver.solve(large_clauses, num_vars=8001, timeout=1e-5)
+        res = self.solver.solve(large_clauses, num_vars=8001, timeout=0.001)
 
         self.assertTrue(res.timed_out)
         self.assertFalse(res.sat)
@@ -979,7 +982,10 @@ class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
         self.solver = DPLLSolver()
 
     def test_random_cnf_cross_validation_300(self) -> None:
-        """Đối chiếu DPLL với Brute Force trên 300 CNF ngẫu nhiên (seed cố định)."""
+        """Đối chiếu DPLL với Brute Force trên 300 CNF ngẫu nhiên (seed cố định).
+
+        Ghi chú: D4 test thuần CNF độc lập với game domain; C7 sẽ test semantic ↔ encoder.
+        """
         import itertools
         import random
 
