@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QApplication, QFileDialog, QHBoxLayout, QLabel, Q
 from engine.game_state import ACCEPTED, CONTRADICTED, NOT_PROVABLE, PublicKB
 from gui import theme
 from gui.clue_text import STATUS_VN, cells_of_clue, format_clue_text
-from gui.components import (BeamOverlay, ClueListView, ConanToast, ConanWidget, EffectOverlay, GadgetButton,
+from gui.components import (ClueListView, ConanToast, ConanWidget, EffectOverlay, GadgetButton,
                             GridView, NeonTitle, NightBackdrop, NotebookPanel, RadialMenu,
                             TerminalMessage)
 from gui.solver_driver import STEPPED, STUCK, SOLVED, agent_counters, run_step
@@ -120,8 +120,6 @@ class MainWindow(QMainWindow):
         bar.addWidget(self.message_label, 1)
         root.addLayout(bar)
 
-        self.beams = BeamOverlay(self.backdrop)
-        self.beams.set_resolver(self._cell_center)
         self.radial = RadialMenu(self.backdrop)
         self.toast = ConanToast(self.backdrop)
         self.effect = EffectOverlay(self.backdrop)
@@ -160,12 +158,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.conan)
         return side
 
-    def _cell_center(self, cell: str) -> Optional[QPointF]:
-        card = self.grid.cards.get(cell)
-        return QPointF(card.mapTo(self.backdrop, card.rect().center())) if card else None
-
     def _layout_overlays(self) -> None:
-        self.beams.setGeometry(self.backdrop.rect())
         for overlay in (self.radial, self.effect):
             if overlay.isVisible():
                 overlay.setGeometry(self.backdrop.rect())
@@ -260,7 +253,6 @@ class MainWindow(QMainWindow):
         self.names = {cell: chars[cell].name for cell in chars}
         self.grid.set_board(n, {cell: (chars[cell].name, chars[cell].profession) for cell in chars})
         self.notebook.reset()
-        self.beams.clear()
         self._baseline = agent_counters(self.agent)
         self._step_no, self._dpll_ms, self._hint_cell = 0, 0.0, None
         self.radial.close_menu()
@@ -304,7 +296,6 @@ class MainWindow(QMainWindow):
             card.set_highlight("")
         clue = self._clue_of(clue_id) if clue_id else None
         if clue is None:
-            self.beams.clear()
             self.clue_list.clear_selection()
             return
         self.sound.play("clue")
@@ -314,7 +305,6 @@ class MainWindow(QMainWindow):
         if clue.owner not in cells:
             self.grid.cards[clue.owner].set_highlight("source")
         self.clue_list.select(clue_id)
-        self.beams.show_links(clue.owner, cells)
         text = format_clue_text(clue, self.names)
         self.conan.say(text, "think")
         self._say(f"Manh mối của {self.names[clue.owner]} ({clue.owner}): {text}")
