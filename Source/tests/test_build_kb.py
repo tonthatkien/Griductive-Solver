@@ -1,9 +1,11 @@
 """Test C6: Encoder.build_kb = CNF(clue đã lật) ∧ unit clause của ô đã chứng minh."""
+import json
 import unittest
 from copy import deepcopy
 from pathlib import Path
 
-from engine.clue import Clue
+from engine import board
+from engine.clue import Clue, clue_from_dict
 from engine.constants import CRIMINAL, INCONSISTENT, INNOCENT, UNKNOWN
 from engine.game_state import GameEngine, PublicKB
 from logic.cnf_encoder import Encoder
@@ -100,10 +102,10 @@ class TestBuildKbInvalidInput(unittest.TestCase):
                 Encoder(N).build_kb(PublicKB(N, proved={"A1": bad}))
 
     def test_invalid_revealed_clue_raises(self):
-        bad = Clue(id="clue_A1", owner="A1", type="FACT", params={"target": "D1",
-                                                                  "status": CRIMINAL})
+        bad = Clue(id="clue_A1", owner="A1", type="FACT",
+                   params={"target": "D1", "status": CRIMINAL})
         with self.assertRaises(ValueError):
-            Encoder(N).build_kb(PublicKB(N, revealed_clues=(bad,)))
+            Encoder(N).build_kb(PublicKB(N, revealed_clues=[bad]))
 
 
 class TestBuildKbWithDpll(unittest.TestCase):
@@ -129,6 +131,35 @@ class TestBuildKbWithDpll(unittest.TestCase):
         result = DPLLSolver().solve(kb.clauses, kb.num_vars)
         self.assertFalse(result.sat)
         self.assertFalse(result.timed_out)
+
+
+class TestBuildKbFullPuzzle(unittest.TestCase):
+    """Dùng TOÀN BỘ clue của p01 (chỉ trong test, agent không bao giờ làm vậy).
+
+    p01 là puzzle có nghiệm duy nhất, nên KB dựng từ toàn bộ clue của nó phải có
+    đúng một model trên biến primary, và model đó khớp nhãn ẩn. Đây là kiểm tra
+    cho riêng p01, không phải kiểm tra tổng quát cho mọi puzzle."""
+
+    def test_p01_all_clues_give_unique_model_matching_labels(self):
+        with P01_PATH.open(encoding="utf-8") as fh:
+            data = json.load(fh)
+        chars = sorted(data["characters"], key=lambda c: board.cell_index(c["cell"], N))
+        labels = {c["cell"]: c["criminal"] for c in chars}
+        clues = [clue_from_dict(c["cell"], c["clue"]) for c in chars]
+        proved = {cell: CRIMINAL if labels[cell] else INNOCENT
+                  for cell in data["initially_revealed"]}
+        kb = Encoder(N).build_kb(PublicKB(N, revealed_clues=clues, proved=proved))
+
+        solver = DPLLSolver()
+        result = solver.solve(kb.clauses, kb.num_vars)
+        self.assertTrue(result.sat)
+        primary = range(1, kb.num_primary + 1)
+        expected = {board.var_of(cell, N): value for cell, value in labels.items()}
+        self.assertEqual({v: result.model[v] for v in primary}, expected)
+
+        # blocking clause chỉ trên biến primary: không còn nghiệm thứ hai
+        block = [-v if result.model[v] else v for v in primary]
+        self.assertFalse(solver.solve(kb.clauses + [block], kb.num_vars).sat)
 
 
 if __name__ == "__main__":
