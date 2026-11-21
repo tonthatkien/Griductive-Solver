@@ -651,5 +651,411 @@ class TestDPLLAssumptionsAndModel(unittest.TestCase):
         self.assertEqual(clauses, [[1], [2]])
 
 
+class TestDPLLPhase1Statistics(unittest.TestCase):
+    """Kiểm thử chuẩn hóa bộ đếm thống kê SolverStats.
+
+    Xác minh đúng đắn của decisions, propagations, backtracks, runtime và tính
+    độc lập giữa các lần gọi solve() theo đúng quy ước mã nguồn.
+    """
+
+    def setUp(self) -> None:
+        self.solver = DPLLSolver()
+
+    def test_pure_unit_propagation_stats(self) -> None:
+        """Công thức giải thuần bằng Unit Propagation thì decisions=0, backtracks=0."""
+        clauses = [[1], [-1, 2], [-2, 3]]
+        res = self.solver.solve(clauses, num_vars=3)
+
+        self.assertTrue(res.sat)
+        self.assertEqual(res.stats.decisions, 0)
+        self.assertEqual(res.stats.propagations, 3)
+        self.assertEqual(res.stats.backtracks, 0)
+        self.assertGreaterEqual(res.stats.runtime, 0.0)
+
+    def test_assumptions_do_not_count_as_propagations(self) -> None:
+        """Assumptions được đưa thẳng vào bảng gán ban đầu, không tăng propagations."""
+        # Assumptions thỏa mãn clause ngay từ đầu -> không có unit propagation
+        res = self.solver.solve([[1, 2]], num_vars=2, assumptions=[1])
+        self.assertTrue(res.sat)
+        self.assertEqual(res.stats.propagations, 0)
+        self.assertEqual(res.stats.decisions, 0)
+        self.assertEqual(res.stats.backtracks, 0)
+
+        # Công thức rỗng với nhiều assumptions -> propagations vẫn là 0
+        res_empty = self.solver.solve([], num_vars=3, assumptions=[1, -2, 3])
+        self.assertTrue(res_empty.sat)
+        self.assertEqual(res_empty.stats.propagations, 0)
+        self.assertEqual(res_empty.stats.decisions, 0)
+        self.assertEqual(res_empty.stats.backtracks, 0)
+
+    def test_branching_and_backtracks_accounting(self) -> None:
+        """Kiểm tra đếm decisions và backtracks theo từng nhánh đệ quy thất bại."""
+        # 1. Rẽ nhánh 1 tầng, nhánh True thỏa mãn ngay -> 1 decision, 0 backtrack
+        res_first = self.solver.solve([[1, 2]], num_vars=2)
+        self.assertTrue(res_first.sat)
+        self.assertEqual(res_first.stats.decisions, 1)
+        self.assertEqual(res_first.stats.backtracks, 0)
+
+        # 2. Nhánh True mâu thuẫn, nhánh False thỏa mãn -> 1 decision, 1 backtrack
+        clauses_tf = [[1, 2], [-1, 3], [-1, -3]]
+        res_tf = self.solver.solve(clauses_tf, num_vars=3)
+        self.assertTrue(res_tf.sat)
+        self.assertEqual(res_tf.stats.decisions, 1)
+        self.assertEqual(res_tf.stats.backtracks, 1)
+
+        # 3. Cả 2 nhánh True và False đều mâu thuẫn -> 1 decision, 2 backtracks
+        clauses_unsat = [[1, 2], [1, -2], [-1, 2], [-1, -2]]
+        res_unsat = self.solver.solve(clauses_unsat, num_vars=2)
+        self.assertFalse(res_unsat.sat)
+        self.assertEqual(res_unsat.stats.decisions, 1)
+        self.assertEqual(res_unsat.stats.backtracks, 2)
+
+    def test_direct_assumptions_conflict_stats(self) -> None:
+        """Assumptions tự mâu thuẫn thoát sớm: decisions=0, propagations=0, backtracks=0."""
+        res = self.solver.solve([[1, 2]], num_vars=2, assumptions=[1, -1])
+        self.assertFalse(res.sat)
+        self.assertIsNone(res.model)
+        self.assertFalse(res.timed_out)
+        self.assertEqual(res.stats.decisions, 0)
+        self.assertEqual(res.stats.propagations, 0)
+        self.assertEqual(res.stats.backtracks, 0)
+        self.assertGreaterEqual(res.stats.runtime, 0.0)
+
+    def test_runtime_recorded_in_all_exit_paths(self) -> None:
+        """Runtime được đo bằng time.perf_counter() và cập nhật ở mọi ngõ thoát."""
+        # Thoát sớm khi timeout < 0 hoặc timeout == 0
+        res_neg = self.solver.solve([[1]], num_vars=1, timeout=-1.0)
+        self.assertTrue(res_neg.timed_out)
+        self.assertGreaterEqual(res_neg.stats.runtime, 0.0)
+
+        res_zero = self.solver.solve([[1]], num_vars=1, timeout=0.0)
+        self.assertTrue(res_zero.timed_out)
+        self.assertGreaterEqual(res_zero.stats.runtime, 0.0)
+
+        # Thoát sớm khi assumptions mâu thuẫn
+        res_conflict = self.solver.solve([[1]], num_vars=1, assumptions=[1, -1])
+        self.assertGreaterEqual(res_conflict.stats.runtime, 0.0)
+
+        # Ngõ SAT bình thường
+        res_sat = self.solver.solve([[1]], num_vars=1)
+        self.assertGreaterEqual(res_sat.stats.runtime, 0.0)
+
+        # Ngõ UNSAT bình thường
+        res_unsat = self.solver.solve([[1], [-1]], num_vars=1)
+        self.assertGreaterEqual(res_unsat.stats.runtime, 0.0)
+
+    def test_stats_independent_reset_across_calls(self) -> None:
+        """Mỗi lần gọi solve() phải reset hoàn toàn SolverStats, không cộng dồn."""
+        # Lần 1: Pure unit propagation
+        res1 = self.solver.solve([[1], [-1, 2]], num_vars=2)
+        self.assertEqual(res1.stats.decisions, 0)
+        self.assertEqual(res1.stats.propagations, 2)
+        self.assertEqual(res1.stats.backtracks, 0)
+
+        # Lần 2: Xung đột assumptions trực tiếp
+        res2 = self.solver.solve([[1, 2]], num_vars=2, assumptions=[1, -1])
+        self.assertEqual(res2.stats.decisions, 0)
+        self.assertEqual(res2.stats.propagations, 0)
+        self.assertEqual(res2.stats.backtracks, 0)
+
+        # Lần 3: Rẽ nhánh có quay lui
+        res3 = self.solver.solve([[1, 2], [-1, 3], [-1, -3]], num_vars=3)
+        self.assertEqual(res3.stats.decisions, 1)
+        self.assertEqual(res3.stats.backtracks, 1)
+
+        # Lần 4: Chạy lại bài toán đơn giản, xác nhận sạch sẽ
+        res4 = self.solver.solve([[1]], num_vars=1)
+        self.assertEqual(res4.stats.decisions, 0)
+        self.assertEqual(res4.stats.propagations, 1)
+        self.assertEqual(res4.stats.backtracks, 0)
+        self.assertGreaterEqual(res4.stats.runtime, 0.0)
+
+
+class TestDPLLPhase2Timeout(unittest.TestCase):
+    """Kiểm thử cơ chế Timeout định kỳ và các ca biên.
+
+    Xác minh phát hiện TIMEOUT an toàn, không treo hệ thống, phân biệt với UNSAT,
+    chặn đúng các ca stress tổ hợp và bảo đảm cô lập trạng thái khi tái sử dụng.
+    """
+
+    def setUp(self) -> None:
+        self.solver = DPLLSolver()
+
+    def test_instant_timeout_nonpositive_values(self) -> None:
+        """Timeout <= 0 (0, số âm) trả về TIMEOUT ngay mà không tìm kiếm."""
+        for t_val in [0.0, -0.5, -1.0, -1e-9]:
+            with self.subTest(timeout=t_val):
+                res = self.solver.solve([[1, 2], [-1, 2]], num_vars=2, timeout=t_val)
+                self.assertTrue(res.timed_out)
+                self.assertFalse(res.sat)
+                self.assertIsNone(res.model)
+                self.assertGreaterEqual(res.stats.runtime, 0.0)
+                self.assertEqual(res.stats.decisions, 0)
+                self.assertEqual(res.stats.propagations, 0)
+                self.assertEqual(res.stats.backtracks, 0)
+
+    def test_timeout_during_active_branching(self) -> None:
+        """Ngắt an toàn khi solver đang tích cực rẽ nhánh (dùng mock timer chống flaky)."""
+        clauses = [[1, 2], [-1, 3], [-1, -3]]
+
+        def _mock_perf() -> float:
+            # Ngay khi solver đã phân nhánh ít nhất 1 lần, báo quá hạn deadline
+            if self.solver.stats.decisions > 0:
+                return 200.0
+            return 100.0
+
+        with patch("time.perf_counter", side_effect=_mock_perf):
+            res = self.solver.solve(clauses, num_vars=3, timeout=1.0)
+
+        self.assertTrue(res.timed_out)
+        self.assertFalse(res.sat)
+        self.assertIsNone(res.model)
+        self.assertGreater(res.stats.runtime, 0.0)
+        self.assertGreater(res.stats.decisions, 0)
+
+    def test_strict_discrimination_timeout_vs_unsat(self) -> None:
+        """Phân biệt tuyệt đối giữa vô nghiệm (UNSAT) và hết giờ (TIMEOUT)."""
+        res_unsat = self.solver.solve([[1], [-1]], num_vars=1, timeout=1.0)
+        res_timeout = self.solver.solve([[1, 2]], num_vars=2, timeout=0.0)
+
+        self.assertFalse(res_unsat.timed_out)
+        self.assertTrue(res_timeout.timed_out)
+        self.assertFalse(res_unsat.sat)
+        self.assertFalse(res_timeout.sat)
+        self.assertNotEqual(res_unsat.timed_out, res_timeout.timed_out)
+
+    def test_solver_clean_reuse_after_timeout(self) -> None:
+        """Sau khi bị ngắt bởi timeout, solver vẫn dùng lại bình thường và sạch state."""
+        res_timeout = self.solver.solve([[1, 2]], num_vars=2, timeout=0.0)
+        self.assertTrue(res_timeout.timed_out)
+
+        res_next = self.solver.solve([[1, 2], [-1, 2]], num_vars=2, timeout=1.0)
+        self.assertFalse(res_next.timed_out)
+        self.assertTrue(res_next.sat)
+        self.assertIsNotNone(res_next.model)
+        assert res_next.model is not None
+        self.assertTrue(res_next.model[2])
+
+    def test_infinite_assumptions_generator_interrupted(self) -> None:
+        """Dừng an toàn trước chuỗi assumptions sinh liên tục từ generator vô hạn."""
+        def _infinite_stream():
+            while True:
+                yield 1
+
+        res = self.solver.solve(
+            [[1]], num_vars=1, assumptions=_infinite_stream(), timeout=0.005
+        )
+        self.assertTrue(res.timed_out)
+        self.assertFalse(res.sat)
+        self.assertIsNone(res.model)
+        self.assertGreater(res.stats.runtime, 0.0)
+
+    def test_periodic_polling_batch_runtime_positive(self) -> None:
+        """Cơ chế kiểm tra deadline định kỳ đảm bảo runtime dương (timeout 1ms)."""
+        large_clauses = [[1]] + [[-i, i + 1] for i in range(1, 8000)]
+        res = self.solver.solve(large_clauses, num_vars=8001, timeout=0.001)
+
+        self.assertTrue(res.timed_out)
+        self.assertFalse(res.sat)
+        self.assertGreater(res.stats.runtime, 0.0)
+
+
+class TestDPLLPhase3Entailment(unittest.TestCase):
+    """Kiểm thử suy diễn logic và ví dụ mẫu trong đề bài.
+
+    Ví dụ: KB = (A ∨ B) ∧ (¬A ∨ B), chứng minh B là Criminal qua phản chứng KB ∧ ¬B UNSAT,
+    xác nhận A là UNKNOWN qua 2 truy vấn SAT, và kiểm tra không phát sinh rẽ nhánh.
+    """
+
+    def setUp(self) -> None:
+        self.solver = DPLLSolver()
+
+    def test_spec_kb_proves_criminal_without_branching(self) -> None:
+        """KB ∧ ¬B vô nghiệm chứng minh B Criminal; hoàn tất bằng unit propagate."""
+        # A = 1, B = 2
+        kb = [[1, 2], [-1, 2]]
+
+        # Giả định B = Innocent (¬B, literal -2)
+        res_refutation = self.solver.solve(kb, num_vars=2, assumptions=[-2])
+        self.assertFalse(res_refutation.sat)
+        self.assertIsNone(res_refutation.model)
+        self.assertFalse(res_refutation.timed_out)
+
+        # Suy diễn phản chứng hoàn tất mà không cần rẽ nhánh hay quay lui
+        self.assertEqual(res_refutation.stats.decisions, 0)
+        self.assertEqual(res_refutation.stats.backtracks, 0)
+
+        # Ngược lại KB ∧ B thỏa mãn
+        res_b = self.solver.solve(kb, num_vars=2, assumptions=[2])
+        self.assertTrue(res_b.sat)
+        self.assertIsNotNone(res_b.model)
+        assert res_b.model is not None
+        self.assertTrue(res_b.model[2])
+
+    def test_spec_kb_classifies_a_as_unknown(self) -> None:
+        """Cả KB ∧ A và KB ∧ ¬A đều thỏa mãn nên A là UNKNOWN."""
+        kb = [[1, 2], [-1, 2]]
+
+        # Thử A = Criminal (literal 1) -> SAT với B = True
+        res_pos = self.solver.solve(kb, num_vars=2, assumptions=[1])
+        self.assertTrue(res_pos.sat)
+        self.assertIsNotNone(res_pos.model)
+        assert res_pos.model is not None
+        self.assertTrue(res_pos.model[1])
+        self.assertTrue(res_pos.model[2])
+
+        # Thử A = Innocent (literal -1) -> SAT với B = True
+        res_neg = self.solver.solve(kb, num_vars=2, assumptions=[-1])
+        self.assertTrue(res_neg.sat)
+        self.assertIsNotNone(res_neg.model)
+        assert res_neg.model is not None
+        self.assertFalse(res_neg.model[1])
+        self.assertTrue(res_neg.model[2])
+
+    def test_refutation_proves_innocent_without_branching(self) -> None:
+        """Chứng minh Innocent qua phản chứng KB ∧ C_i UNSAT với decisions=0."""
+        # KB = (A ∨ ¬B) ∧ (¬A ∨ ¬B) với A = 1, B = 2
+        kb_innocent = [[1, -2], [-1, -2]]
+
+        # Giả định B = Criminal (literal 2) -> mâu thuẫn trực tiếp qua unit propagate
+        res_criminal = self.solver.solve(kb_innocent, num_vars=2, assumptions=[2])
+        self.assertFalse(res_criminal.sat)
+        self.assertIsNone(res_criminal.model)
+        self.assertFalse(res_criminal.timed_out)
+        self.assertEqual(res_criminal.stats.decisions, 0)
+        self.assertEqual(res_criminal.stats.backtracks, 0)
+
+        # Giả định B = Innocent (literal -2) -> SAT
+        res_innocent = self.solver.solve(kb_innocent, num_vars=2, assumptions=[-2])
+        self.assertTrue(res_innocent.sat)
+        self.assertIsNotNone(res_innocent.model)
+        assert res_innocent.model is not None
+        self.assertFalse(res_innocent.model[2])
+
+    def test_inconsistent_kb_detected_without_branching(self) -> None:
+        """KB mâu thuẫn [[1], [-1]] trả về UNSAT với decisions=0, backtracks=0."""
+        res = self.solver.solve([[1], [-1]], num_vars=1)
+        self.assertFalse(res.sat)
+        self.assertIsNone(res.model)
+        self.assertFalse(res.timed_out)
+        self.assertEqual(res.stats.decisions, 0)
+        self.assertEqual(res.stats.backtracks, 0)
+
+    def test_all_models_of_spec_kb_force_criminal_b(self) -> None:
+        """Toàn bộ model của KB đều có B=True; không tồn tại model nào có B=False."""
+        kb = [[1, 2], [-1, 2]]
+
+        # Model 1
+        res1 = self.solver.solve(kb, num_vars=2)
+        self.assertTrue(res1.sat)
+        self.assertIsNotNone(res1.model)
+        assert res1.model is not None
+        self.assertTrue(res1.model[2])
+
+        # Chặn model 1 để tìm model 2
+        block1 = [-1 if res1.model[1] else 1, -2]
+        res2 = self.solver.solve(kb + [block1], num_vars=2)
+        self.assertTrue(res2.sat)
+        self.assertIsNotNone(res2.model)
+        assert res2.model is not None
+        self.assertTrue(res2.model[2])
+        self.assertNotEqual(res1.model[1], res2.model[1])
+
+        # Chặn cả 2 model -> không còn model nào khác (UNSAT)
+        block2 = [-1 if res2.model[1] else 1, -2]
+        res3 = self.solver.solve(kb + [block1, block2], num_vars=2)
+        self.assertFalse(res3.sat)
+        self.assertIsNone(res3.model)
+
+
+class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
+    """Kiểm chứng chéo toàn diện giữa DPLL và Brute Force.
+
+    Tập trung vào tính đúng đắn:
+    1. So sánh 1:1 trên 300 công thức ngẫu nhiên có seed cố định (1..7 biến, 0..25 mệnh đề).
+    2. Kiểm chứng nghiệm model thỏa mãn 100% mệnh đề khi SAT.
+    3. Thử nghiệm tích hợp nhỏ với các mẫu CNF sinh từ clue cơ bản (FACT, SAME, DIFFERENT).
+    4. Xác minh sự trùng khớp khi công thức có nghiệm duy nhất.
+    """
+
+    def setUp(self) -> None:
+        self.solver = DPLLSolver()
+
+    def test_random_cnf_cross_validation_300(self) -> None:
+        """Đối chiếu DPLL với Brute Force trên 300 CNF ngẫu nhiên (seed cố định).
+
+        Ghi chú: D4 test thuần CNF độc lập với game domain; C7 sẽ test semantic ↔ encoder.
+        """
+        import itertools
+        import random
+
+        rng = random.Random(2026)
+        for idx in range(300):
+            n = rng.randint(1, 7)
+            m = rng.randint(0, 25)
+            clauses = [
+                [rng.choice([-1, 1]) * rng.randint(1, n) for _ in range(rng.randint(1, 3))]
+                for _ in range(m)
+            ]
+
+            def _sat_under(assignment: Tuple[bool, ...]) -> bool:
+                return all(
+                    any(assignment[abs(lit) - 1] == (lit > 0) for lit in clause)
+                    for clause in clauses
+                )
+
+            expected_sat = any(
+                _sat_under(a) for a in itertools.product([False, True], repeat=n)
+            )
+            res = self.solver.solve(clauses, num_vars=n)
+
+            self.assertEqual(
+                res.sat,
+                expected_sat,
+                f"Lệch kết quả tại test #{idx} với n={n}, clauses={clauses}",
+            )
+
+            # Nếu SAT, model phải đầy đủ và thỏa mãn tất cả mệnh đề
+            if res.sat:
+                self.assertIsNotNone(res.model)
+                assert res.model is not None
+                self.assertEqual(set(res.model.keys()), set(range(1, n + 1)))
+                self.assertTrue(
+                    all(self.solver.is_clause_satisfied(c, res.model) for c in clauses)
+                )
+
+    def test_basic_clue_cnf_patterns_against_brute_force(self) -> None:
+        """Kiểm chứng tích hợp mẫu CNF cơ bản (FACT, SAME, DIFFERENT) với Brute Force."""
+        import itertools
+
+        # 4 biến tương ứng lưới 2x2: FACT(1), SAME(1, 2), DIFFERENT(2, 3)
+        clauses = [[1], [-1, 2], [1, -2], [2, 3], [-2, -3]]
+        n = 4
+
+        def _sat_under(a: Tuple[bool, ...]) -> bool:
+            return all(any(a[abs(lit) - 1] == (lit > 0) for lit in c) for c in clauses)
+
+        bf_models = [a for a in itertools.product([False, True], repeat=n) if _sat_under(a)]
+        self.assertEqual(len(bf_models), 2)
+
+        res = self.solver.solve(clauses, num_vars=n)
+        self.assertTrue(res.sat)
+        self.assertIsNotNone(res.model)
+        assert res.model is not None
+
+        # Model tìm được bởi DPLL phải nằm trong danh sách nghiệm vét cạn
+        model_tuple = tuple(res.model[i] for i in range(1, n + 1))
+        self.assertIn(model_tuple, bf_models)
+
+    def test_unique_solution_matches_brute_force(self) -> None:
+        """Khi công thức có đúng 1 nghiệm theo Brute Force, DPLL tìm ra đúng nghiệm đó."""
+        # Ràng buộc cố định cả 4 biến: 1=True, 2=False, 3=True, 4=False
+        clauses = [[1], [-2], [3], [-4]]
+        res = self.solver.solve(clauses, num_vars=4)
+
+        self.assertTrue(res.sat)
+        self.assertEqual(res.model, {1: True, 2: False, 3: True, 4: False})
+
+
 if __name__ == "__main__":
     unittest.main()
