@@ -1,0 +1,69 @@
+{
+  "n": 3,
+  "characters": [
+    {
+      "cell": "A1",
+      "name": "Adam",
+      "profession": "Chef",
+      "criminal": true,
+      "clue": {"type": "SAME_STATUS", "cell1": "C1", "cell2": "C2"}
+    },
+    {
+      "cell": "B1",
+      "name": "Beth",
+      "profession": "Teacher",
+      "criminal": false,
+      "clue": {"type": "PARITY", "parity": "ODD", "region": {"type": "neighbors", "cell": "B1"}, "status": "INNOCENT"}
+    },
+    {
+      "cell": "C1",
+      "name": "Carl",
+      "profession": "Driver",
+      "criminal": true,
+      "clue": {"type": "PARITY", "parity": "ODD", "region": {"type": "neighbors", "cell": "C2"}, "status": "CRIMINAL"}
+    },
+    {
+      "cell": "A2",
+      "name": "Dora",
+      "profession": "Astronaut",
+      "criminal": true,
+      "clue": {"type": "AT_LEAST", "region": {"type": "neighbors", "cell": "C1"}, "k": 2, "status": "INNOCENT"}
+    },
+    {
+      "cell": "B2",
+      "name": "Evan",
+      "profession": "Sailor",
+      "criminal": false,
+      "clue": {"type": "FACT", "target": "A1", "status": "CRIMINAL"}
+    },
+    {
+      "cell": "C2",
+      "name": "Faye",
+      "profession": "Barber",
+      "criminal": true,
+      "clue": {"type": "AT_MOST", "region": {"type": "neighbors", "cell": "B2"}, "k": 5, "status": "INNOCENT"}
+    },
+    {
+      "cell": "A3",
+      "name": "George",
+      "profession": "Tailor",
+      "criminal": false,
+      "clue": {"type": "FACT", "target": "B2", "status": "INNOCENT"}
+    },
+    {
+      "cell": "B3",
+      "name": "Holly",
+      "profession": "Clerk",
+      "criminal": false,
+      "clue": {"type": "COMPARE", "region1": {"type": "col", "letter": "B"}, "op": "GT", "region2": {"type": "col", "letter": "C"}, "status": "INNOCENT"}
+    },
+    {
+      "cell": "C3",
+      "name": "Ian",
+      "profession": "Banker",
+      "criminal": false,
+      "clue": {"type": "EXACTLY", "region": {"type": "row", "number": 3}, "k": 0, "status": "CRIMINAL"}
+    }
+  ],
+  "initially_revealed": ["C3"]
+}
