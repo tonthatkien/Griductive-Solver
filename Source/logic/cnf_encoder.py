@@ -3,28 +3,27 @@
 Quy ước: clause = list[int] (literal dương/âm), CNF = list[clause].
 Biến primary = board.var_of(cell, n); biến phụ bắt đầu từ n*n + 1.
 
-Đã xong: C1 (khung), C2 (FACT, SAME_STATUS, DIFFERENT_STATUS), C3 (EXACTLY, AT_LEAST, AT_MOST).
+Đã xong: C1 (khung), C2 (FACT, SAME_STATUS, DIFFERENT_STATUS), C3 (EXACTLY, AT_LEAST, AT_MOST),
+         C4 (PARITY), C5 (COMPARE).
 
 TODO(Scope C):
-  - encode_clue: Extension 1 (PARITY, C4), Extension 2 (COMPARE, C5): tự chọn encoding
-    (có thể dùng biến phụ), ghi rõ encoding và số clause trong docstring
   - build_kb(public_kb) -> KB(clauses, num_primary, num_aux)   (C6)
-        KB_t = CNF(revealed clues) ∧ unit clause cho mỗi verdict đã chứng minh
-        TUYỆT ĐỐI không đưa nhãn ẩn / clue chưa lật vào.
 
-Các encoding đã cài (đều tự động, KHÔNG viết tay CNF cho từng puzzle, 0 biến phụ):
+Các encoding đã cài (đều tự động, KHÔNG viết tay CNF cho từng puzzle):
       FACT              : [[±Ci]]
       SAME_STATUS       : (¬Ci ∨ Cj) ∧ (Ci ∨ ¬Cj)
       DIFFERENT_STATUS  : (Ci ∨ Cj) ∧ (¬Ci ∨ ¬Cj)
       AT_MOST k         : mọi tập (k+1) literal: ít nhất một literal False  -> C(m, k+1) clause
       AT_LEAST k        : mọi tập (m-k+1) literal: ít nhất một literal True -> C(m, m-k+1) clause
       EXACTLY k         : AT_MOST k ∧ AT_LEAST k
+      PARITY            : chuỗi XOR (Tseitin), m-2 biến phụ, 4m-6 clause
+      COMPARE           : hai bộ đếm unary rồi nối, |R|(|R|+1)/2 biến phụ mỗi vùng
       status = INNOCENT thì đảo cực literal của các ô trong vùng.
 
 Report cần: suy ra công thức cho 1 clue nhị phân (SAME/DIFFERENT) và 1 clue đếm (EXACTLY).
 """
 from dataclasses import dataclass
-from typing import List, TYPE_CHECKING, Tuple
+from typing import List, TYPE_CHECKING, Tuple, Union
 from itertools import combinations
 
 from engine import board
@@ -35,6 +34,11 @@ if TYPE_CHECKING:
     from engine.game_state import PublicKB
 
 Clause = List[int]
+Lit = Union[int, bool]
+
+def _neg(x: Lit) -> Lit:
+    """Phủ định literal hoặc hằng."""
+    return (not x) if isinstance(x, bool) else -x
 
 
 @dataclass
@@ -58,6 +62,15 @@ class KB:
 class Encoder:
     """Đổi clue sang CNF; biến phụ được cấp tách riêng khỏi biến primary"""
 
+    # (đảo hai vùng?, strict?) cho từng phép so sánh; EQ = GE ∧ LE
+    _COMPARE_PLAN = {
+        "GE": [(False, False)],
+        "GT": [(False, True)],
+        "LE": [(True, False)],
+        "LT": [(True, True)],
+        "EQ": [(False, False), (True, False)],
+    }
+
     def __init__(self, n: int):
         self.n = n
         self._next_aux = board.first_aux_var(n)
@@ -78,13 +91,13 @@ class Encoder:
     def literal_of(self, cell: str, status: str) -> int:
         """Literal của ô: +var nếu status là CRIMINAL, -var nếu là INNOCENT"""
         if not board.is_valid_cell(cell, self.n):
-            raise ValueError(f"Cell is not valid: {cell!r}")
+            raise ValueError(f"Cell is không hợp lệ: {cell!r}")
         var = board.var_of(cell, self.n)
         if status == CRIMINAL:
             return var
         if status == INNOCENT:
             return -var
-        raise ValueError(f"Status is not valid: {status!r}")
+        raise ValueError(f"Status không hợp lệ: {status!r}")
 
     @staticmethod
     def _xor_gate(t: int, a: int, b: int) -> List[Clause]:
@@ -132,7 +145,7 @@ class Encoder:
     def encode_clue(self, clue: Clue) -> List[Clause]:
         """
         Đổi một clue sang CNF (FACT, SAME_STATUS, DIFFERENT_STATUS,
-                                  EXACTLY, AT_LEAST, AT_MOST, PARITY)
+                            EXACTLY, AT_LEAST, AT_MOST, PARITY, COMPARE)
         """
         validate_clue(clue, self.n)
         if clue.type == "FACT":
@@ -149,7 +162,9 @@ class Encoder:
             return self._encode_exactly(clue)
         if clue.type == "PARITY":
             return self.encode_parity(clue)
-        raise NotImplementedError("C5")
+        if clue.type == "COMPARE":
+            return self._encode_compare(clue)
+        raise ValueError(f"Kiểu clue không hợp lệ: {clue.type!r}")
 
     def _encode_fact(self, clue: Clue) -> List[Clause]:
         """FACT: ô target có trạng thái status  ->  unit clause [±Ci], 0 biến phụ"""
@@ -224,6 +239,79 @@ class Encoder:
         """EXACTLY k = AT_MOST k ∧ AT_LEAST k: C(m, k+1) + C(m, m-k+1) clause, 0 biến phụ"""
         lits, k = self._count_literals(clue)
         return self._at_most_clauses(lits, k) + self._at_least_clauses(lits, k)
+
+    def _encode_compare(self, clue: Clue) -> List[Clause]:
+        """COMPARE: count(region1) op count(region2), đếm các ô có trạng thái `status`.
+
+        Encoding bộ đếm unary (sequential counter, tương đương hai chiều) rồi nối hai bộ đếm:
+          1. Mỗi vùng R có bộ đếm out[j] <=> "ít nhất j ô của R có trạng thái status" (j = 1..|R|).
+             Dùng s[i][j] <=> s[i-1][j] v (x_i ^ s[i-1][j-1]), s[0][0] = True, s[i][j>i] = False.
+             Biến phụ: i*(i+1)/2 cho mỗi vùng (i chạy 1..|R|)  -> |R|(|R|+1)/2.
+          2. GE: mọi j: (count2 >= j) -> (count1 >= j).
+             GT: mọi j >= 0: (count2 >= j) -> (count1 >= j+1).
+             LE, LT: đổi chỗ hai vùng. EQ = GE ^ LE.
+        Số clause ~ 4 * |R|(|R|+1)/2 cho mỗi bộ đếm, cộng thêm O(|R1| + |R2|) clause nối.
+        Hai vùng chồng nhau vẫn đúng vì mỗi bộ đếm đếm riêng theo literal của ô.
+        """
+        validate_clue(clue, self.n)
+        plan = self._COMPARE_PLAN.get(clue.params["op"])
+        if plan is None:  # phòng thủ: kiểm trước khi cấp aux
+            raise ValueError(f"COMPARE: op không hợp lệ: {clue.params['op']!r}")
+        status = clue_status(clue)
+        out1, clauses1 = self._unary_counter(self._region_literals(clue.params["region1"], status))
+        out2, clauses2 = self._unary_counter(self._region_literals(clue.params["region2"], status))
+        clauses = clauses1 + clauses2
+        for swap, strict in plan:
+            big, small = (out2, out1) if swap else (out1, out2)
+            clauses += self._at_least_as_many(big, small, strict)
+        return clauses
+
+    def _region_literals(self, region: dict, status: str) -> List[int]:
+        """Literal của các ô trong vùng (row-major): +var nếu CRIMINAL, -var nếu INNOCENT."""
+        return [self.literal_of(c, status) for c in resolve_region(region, self.n)]
+
+    @staticmethod
+    def _make_clause(items: List[Lit]) -> Union[Clause, None]:
+        """Rút gọn hằng: có True -> clause luôn đúng (None); bỏ False; còn lại là clause."""
+        if any(x is True for x in items):
+            return None
+        return [x for x in items if x is not False]
+
+    def _unary_counter(self, lits: List[int]) -> Tuple[List[int], List[Clause]]:
+        """Bộ đếm unary: trả (out, clauses) với out[j-1] <=> có ít nhất j literal trong lits đúng"""
+        clauses: List[Clause] = []
+        prev: List[int] = []          # prev[j-1] = s[i-1][j]
+        for i, x in enumerate(lits, start=1):
+            cur = [self.new_aux() for _ in range(i)]          # s[i][1..i]
+            for j in range(1, i + 1):
+                s = cur[j - 1]
+                above = prev[j - 1] if j <= len(prev) else False    # s[i-1][j]
+                below = True if j == 1 else prev[j - 2]             # s[i-1][j-1]
+                for items in ([_neg(above), s], [-x, _neg(below), s],
+                              [-s, above, x], [-s, above, below]):
+                    clause = self._make_clause(items)
+                    if clause is not None:
+                        clauses.append(clause)
+            prev = cur
+        return prev, clauses
+
+    def _at_least_as_many(self, big: List[int], small: List[int], strict: bool) -> List[Clause]:
+        """Clause nối: count(big) >= count(small) (strict: count(big) > count(small))."""
+        clauses: List[Clause] = []
+        m = len(big)
+
+        def ge(j: int) -> Lit:                       # count(big) >= j
+            if j <= 0:
+                return True
+            return big[j - 1] if j <= m else False
+
+        for j in range(0 if strict else 1, len(small) + 1):
+            target = ge(j + 1 if strict else j)
+            premise: Lit = True if j == 0 else small[j - 1]
+            clause = self._make_clause([_neg(premise), target])
+            if clause is not None:
+                clauses.append(clause)
+        return clauses
 
     def build_kb(self, public_kb: "PublicKB") -> KB:
         raise NotImplementedError("C6")
