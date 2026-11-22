@@ -18,7 +18,6 @@ ROW1 = {"type": "row", "number": 1}
 ROW2 = {"type": "row", "number": 2}
 ROW3 = {"type": "row", "number": 3}
 COLA = {"type": "col", "letter": "A"}
-COLB = {"type": "col", "letter": "B"}
 NEI_A1 = {"type": "neighbors", "cell": "A1"}
 NEI_B2 = {"type": "neighbors", "cell": "B2"}
 ONE_CELL = {"type": "list", "cells": ["C3"]}
@@ -34,7 +33,10 @@ def mismatches(clue: Clue, n: int = N, clauses=None) -> List[Tuple[bool, ...]]:
     enc = Encoder(n)
     if clauses is None:
         clauses = enc.encode_clue(clue)
-    num_vars = n * n + enc.num_aux
+        num_vars = n * n + enc.num_aux
+    else:
+        max_var = max((abs(lit) for c in clauses for lit in c), default=0)
+        num_vars = max(n * n, max_var)
     cells = clue_cells(clue, n)
     solver = DPLLSolver()
     bad = []
@@ -119,6 +121,7 @@ class EncoderVsSemanticTest(unittest.TestCase):
             (ROW1, COLA),  # hai vùng chồng nhau ở A1
             (NEI_A1, ROW3),  # hai vùng rời nhau
             (ONE_CELL, COLA),  # biên: vùng 1 ô
+            (COLA, ONE_CELL),  # biên: vùng lớn so với vùng 1 ô
             (ROW2, ROW2),  # biên: hai vùng giống hệt
         )
         for index, (region1, region2) in enumerate(pairs):
@@ -131,6 +134,11 @@ class EncoderVsSemanticTest(unittest.TestCase):
                                   op=op, status=status)
                         self.assert_agree(clue)
 
+    def test_compare_status_defaults_to_criminal(self):
+        for op in ("GT", "GE", "EQ", "LE", "LT"):
+            with self.subTest(op=op):
+                self.assert_agree(mk("COMPARE", region1=ROW1, region2=COLA, op=op))
+
 
 class HarnessSanityTest(unittest.TestCase):
     """Chứng minh test đối chiếu thật sự bắt được lỗi."""
@@ -142,6 +150,13 @@ class HarnessSanityTest(unittest.TestCase):
             del clauses[dropped]
             with self.subTest(dropped=dropped):
                 self.assertNotEqual(mismatches(clue, clauses=clauses), [])
+
+    def test_harness_handles_external_clauses_with_aux_vars(self):
+        clue = mk("PARITY", region=ROW1, parity="ODD")
+        clauses = Encoder(N).encode_clue(clue)   # có 1 biến phụ (var 10)
+        self.assertEqual(mismatches(clue, clauses=clauses), [])
+        del clauses[0]
+        self.assertNotEqual(mismatches(clue, clauses=clauses), [])
 
 
 if __name__ == "__main__":

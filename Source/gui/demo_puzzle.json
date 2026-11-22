@@ -1,0 +1,131 @@
+{
+ "n": 3,
+ "title": "Vụ án phòng thí nghiệm của Tiến sĩ Agasa",
+ "characters": [
+  {
+   "cell": "A1",
+   "name": "Agasa",
+   "profession": "Nhà phát minh",
+   "criminal": false,
+   "clue": {
+    "type": "SAME",
+    "a": "B1",
+    "b": "A2"
+   }
+  },
+  {
+   "cell": "B1",
+   "name": "Ai",
+   "profession": "Nhà khoa học",
+   "criminal": true,
+   "clue": {
+    "type": "FACT",
+    "cell": "A1",
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "C1",
+   "name": "Ayumi",
+   "profession": "Học sinh",
+   "criminal": true,
+   "clue": {
+    "type": "AT_MOST",
+    "region": {
+     "type": "neighbors",
+     "cell": "C1"
+    },
+    "k": 3
+   }
+  },
+  {
+   "cell": "A2",
+   "name": "Genta",
+   "profession": "Học sinh",
+   "criminal": true,
+   "clue": {
+    "type": "DIFFERENT",
+    "a": "B2",
+    "b": "C3"
+   }
+  },
+  {
+   "cell": "B2",
+   "name": "Heiji",
+   "profession": "Thám tử",
+   "criminal": true,
+   "clue": {
+    "type": "EXACTLY",
+    "region": {
+     "type": "neighbors",
+     "cell": "B2"
+    },
+    "k": 6
+   }
+  },
+  {
+   "cell": "C2",
+   "name": "Kazuha",
+   "profession": "Võ sĩ Aikido",
+   "criminal": true,
+   "clue": {
+    "type": "AT_MOST",
+    "region": {
+     "type": "cells",
+     "cells": [
+      "B1",
+      "A2",
+      "C2",
+      "A3"
+     ]
+    },
+    "k": 4
+   }
+  },
+  {
+   "cell": "A3",
+   "name": "Kogoro",
+   "profession": "Thám tử tư",
+   "criminal": true,
+   "clue": {
+    "type": "AT_MOST",
+    "region": {
+     "type": "col",
+     "index": "A"
+    },
+    "k": 2
+   }
+  },
+  {
+   "cell": "B3",
+   "name": "Mitsuhiko",
+   "profession": "Học sinh",
+   "criminal": true,
+   "clue": {
+    "type": "EXACTLY",
+    "region": {
+     "type": "col",
+     "index": "B"
+    },
+    "k": 3
+   }
+  },
+  {
+   "cell": "C3",
+   "name": "Ran",
+   "profession": "Nhà vô địch Karate",
+   "criminal": false,
+   "clue": {
+    "type": "AT_LEAST",
+    "region": {
+     "type": "row",
+     "index": 3
+    },
+    "k": 2
+   }
+  }
+ ],
+ "initially_revealed": [
+  "B3"
+ ]
+}
