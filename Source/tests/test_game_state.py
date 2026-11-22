@@ -2,6 +2,7 @@
 import json
 import tempfile
 import unittest
+import ast
 from copy import deepcopy
 from pathlib import Path
 from engine import board

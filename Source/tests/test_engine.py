@@ -7,6 +7,7 @@ engine._labels) nên độc lập với engine.
 """
 import json
 import unittest
+import ast
 from pathlib import Path
 from typing import Callable, Dict, List
 
@@ -314,6 +315,35 @@ class RealAgentIntegrationTest(unittest.TestCase):
                 self.deduce_until_stuck(engine)
                 self.assertEqual(hidden_cells(engine), [], "agent bị STUCK")
 
+class GetterIsolationTest(unittest.TestCase):
+    def test_revealed_cells_returns_a_copy(self):
+        for name, path, _, _ in PUZZLES:
+            with self.subTest(puzzle=name):
+                engine = load_engine(path)
+                before = engine.revealed_cells
+                engine.revealed_cells.clear()
+                engine.revealed_cells.append(hidden_cells(engine)[0])
+                self.assertEqual(engine.revealed_cells, before)
+
+    def test_characters_is_an_immutable_tuple(self):
+        for name, path, _, _ in PUZZLES:
+            with self.subTest(puzzle=name):
+                self.assertIsInstance(load_engine(path).characters, tuple)
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PRIVATE_ENGINE_ATTRS = {"_labels", "_clues", "_revealed", "_initial_revealed",
+                        "_solution", "is_criminal"}
+
+
+def _imported_modules(tree: ast.AST) -> List[str]:
+    mods: List[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            mods.append(node.module)
+        elif isinstance(node, ast.Import):
+            mods += [alias.name for alias in node.names]
+    return mods
 
 if __name__ == "__main__":
     unittest.main()
