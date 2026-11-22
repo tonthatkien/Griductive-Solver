@@ -1,13 +1,7 @@
-"""CNF Encoder. (Scope C)
+"""CNF Encoder
 
 Quy ước: clause = list[int] (literal dương/âm), CNF = list[clause].
 Biến primary = board.var_of(cell, n); biến phụ bắt đầu từ n*n + 1.
-
-Đã xong: C1 (khung), C2 (FACT, SAME_STATUS, DIFFERENT_STATUS), C3 (EXACTLY, AT_LEAST, AT_MOST),
-         C4 (PARITY), C5 (COMPARE).
-
-TODO(Scope C):
-  - build_kb(public_kb) -> KB(clauses, num_primary, num_aux)   (C6)
 
 Các encoding đã cài (đều tự động, KHÔNG viết tay CNF cho từng puzzle):
       FACT              : [[±Ci]]
@@ -18,6 +12,7 @@ Các encoding đã cài (đều tự động, KHÔNG viết tay CNF cho từng p
       EXACTLY k         : AT_MOST k ∧ AT_LEAST k
       PARITY            : chuỗi XOR (Tseitin), m-2 biến phụ, 4m-6 clause
       COMPARE           : hai bộ đếm unary rồi nối, |R|(|R|+1)/2 biến phụ mỗi vùng
+      build_kb          : CNF(clue đã lật) ∧ unit clause ô đã chứng minh; đếm lại biến phụ mỗi lần
       status = INNOCENT thì đảo cực literal của các ô trong vùng.
 
 Report cần: suy ra công thức cho 1 clue nhị phân (SAME/DIFFERENT) và 1 clue đếm (EXACTLY).
@@ -250,7 +245,9 @@ class Encoder:
           2. GE: mọi j: (count2 >= j) -> (count1 >= j).
              GT: mọi j >= 0: (count2 >= j) -> (count1 >= j+1).
              LE, LT: đổi chỗ hai vùng. EQ = GE ^ LE.
-        Số clause ~ 4 * |R|(|R|+1)/2 cho mỗi bộ đếm, cộng thêm O(|R1| + |R2|) clause nối.
+        Số clause: đúng 2|R|² cho mỗi bộ đếm (sau khi rút gọn hằng), cộng clause nối.
+        Với _at_least_as_many, GE có |small| clause nối, GT có |small| + 1
+        (small là bộ đếm đóng vai vế nhỏ sau khi đổi chỗ); EQ = GE + LE.
         Hai vùng chồng nhau vẫn đúng vì mỗi bộ đếm đếm riêng theo literal của ô.
         """
         validate_clue(clue, self.n)
@@ -314,4 +311,29 @@ class Encoder:
         return clauses
 
     def build_kb(self, public_kb: "PublicKB") -> KB:
-        raise NotImplementedError("C6")
+        """KB_t = CNF(clue đã lật) ∧ unit clause của các ô đã chứng minh.
+
+        Chỉ đọc `public_kb`, nên nhãn ẩn và clue chưa lật không thể lọt vào KB.
+        Thứ tự clause xác định: clue theo thứ tự trong `public_kb.revealed_clues`,
+        rồi unit clause của `proved` theo row-major.
+        Mỗi lần gọi đánh số lại biến phụ từ N*N + 1 và đếm lại `num_aux`, nên gọi
+        nhiều lần trên cùng một Encoder vẫn cho cùng một KB (không cộng dồn biến phụ).
+
+        Raises:
+            ValueError: `public_kb.n` khác n của Encoder, ô trong `proved` sai/ngoài lưới,
+                verdict không thuộc {CRIMINAL, INNOCENT}, hoặc clue không hợp lệ.
+        """
+        if public_kb.n != self.n:
+            raise ValueError(f"PublicKB có n={public_kb.n}, Encoder có n={self.n}")
+        for cell in public_kb.proved:
+            if not isinstance(cell, str) or not board.is_valid_cell(cell, self.n):
+                raise ValueError(f"Ô đã chứng minh không hợp lệ: {cell!r}")
+        self._next_aux = board.first_aux_var(self.n)
+        self.num_aux = 0
+
+        clauses: List[Clause] = []
+        for clue in public_kb.revealed_clues:
+            clauses.extend(self.encode_clue(clue))
+        for cell in sorted(public_kb.proved, key=lambda c: board.cell_index(c, self.n)):
+            clauses.append([self.literal_of(cell, public_kb.proved[cell])])
+        return KB(clauses=clauses, num_primary=self.num_primary, num_aux=self.num_aux)
