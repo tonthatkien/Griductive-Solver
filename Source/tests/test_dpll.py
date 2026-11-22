@@ -1087,7 +1087,7 @@ class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
         # DIFFERENT(B1, A2) -> [2, 3], [-2, -3]
         clauses = [[1], [-1, 2], [1, -2], [2, 3], [-2, -3]]
 
-        # Vét cạn tất cả cấu hình ô cờ bằng logic.semantic.evaluate_all (thay vì tự viết hàm)
+        # Vét cạn tất cả cấu hình ô cờ bằng logic.semantic.evaluate_all
         cells = [cell_of_var(v, board_size) for v in range(1, n + 1)]
         semantic_models = [
             dict(zip(cells, a))
@@ -1096,30 +1096,129 @@ class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
         ]
         self.assertEqual(len(semantic_models), 2)
 
-        # Giải CNF bằng DPLLSolver
+        # Giải tất cả nghiệm bằng DPLLSolver (dùng blocking clauses)
+        dpll_models = []
+        current_clauses = [list(c) for c in clauses]
+        while True:
+            res = self.solver.solve(current_clauses, num_vars=n)
+            if not res.sat:
+                break
+            assert res.model is not None
+            dpll_cell_model = {
+                cell_of_var(var, board_size): val for var, val in res.model.items()
+            }
+            # Mỗi nghiệm tìm ra bởi DPLL PHẢI thỏa mãn logic.semantic.evaluate_all
+            self.assertTrue(
+                evaluate_all(clues, dpll_cell_model, board_size),
+                "Nghiệm do DPLL tìm ra không thỏa mãn logic.semantic.evaluate_all",
+            )
+            dpll_models.append(dpll_cell_model)
+            blocking = [-v if res.model[v] else v for v in range(1, n + 1)]
+            current_clauses.append(blocking)
+
+        # Toàn bộ tập nghiệm của DPLL và semantic evaluator phải khớp 100%
+        self.assertEqual(len(dpll_models), len(semantic_models))
+        for m in dpll_models:
+            self.assertIn(m, semantic_models)
+
+    def test_unique_solution_matches_semantic_evaluator(self) -> None:
+        """Khi tập clue có đúng 1 nghiệm theo semantic evaluator, DPLL tìm đúng nghiệm đó."""
+        import itertools
+        from engine.board import cell_of_var
+        from engine.clue import Clue
+        from logic.semantic import evaluate_all
+
+        board_size = 2
+        n = 4
+        cells = [cell_of_var(v, board_size) for v in range(1, n + 1)]
+        clues = [
+            Clue(
+                id="c1",
+                owner="A1",
+                type="FACT",
+                params={"target": "A1", "status": "CRIMINAL"},
+            ),
+            Clue(
+                id="c2",
+                owner="A1",
+                type="SAME_STATUS",
+                params={"cell1": "A1", "cell2": "B1"},
+            ),
+            Clue(
+                id="c3",
+                owner="A1",
+                type="DIFFERENT_STATUS",
+                params={"cell1": "B1", "cell2": "A2"},
+            ),
+            Clue(
+                id="c4",
+                owner="A1",
+                type="SAME_STATUS",
+                params={"cell1": "A2", "cell2": "B2"},
+            ),
+        ]
+        clauses = [[1], [-1, 2], [1, -2], [2, 3], [-2, -3], [-3, 4], [3, -4]]
+
+        semantic_models = [
+            dict(zip(cells, a))
+            for a in itertools.product([False, True], repeat=n)
+            if evaluate_all(clues, dict(zip(cells, a)), board_size)
+        ]
+        self.assertEqual(len(semantic_models), 1)
+
         res = self.solver.solve(clauses, num_vars=n)
         self.assertTrue(res.sat)
         self.assertIsNotNone(res.model)
         assert res.model is not None
 
-        # Model tìm được bởi DPLL phải thỏa mãn semantic evaluator
-        dpll_cell_assignment = {
+        dpll_cell_model = {
             cell_of_var(var, board_size): val for var, val in res.model.items()
         }
-        self.assertTrue(
-            evaluate_all(clues, dpll_cell_assignment, board_size),
-            "Nghiệm do DPLL tìm ra không thỏa mãn logic.semantic.evaluate_all",
-        )
-        self.assertIn(dpll_cell_assignment, semantic_models)
+        self.assertEqual(dpll_cell_model, semantic_models[0])
+        self.assertTrue(evaluate_all(clues, dpll_cell_model, board_size))
 
-    def test_unique_solution_matches_brute_force(self) -> None:
-        """Khi công thức có đúng 1 nghiệm theo Brute Force, DPLL tìm ra đúng nghiệm đó."""
-        # Ràng buộc cố định cả 4 biến: 1=True, 2=False, 3=True, 4=False
-        clauses = [[1], [-2], [3], [-4]]
-        res = self.solver.solve(clauses, num_vars=4)
+    def test_unsat_clue_patterns_against_semantic_evaluator(self) -> None:
+        """Tập clue mâu thuẫn (vô nghiệm trên semantic) thì DPLL cũng trả về UNSAT."""
+        import itertools
+        from engine.board import cell_of_var
+        from engine.clue import Clue
+        from logic.semantic import evaluate_all
 
-        self.assertTrue(res.sat)
-        self.assertEqual(res.model, {1: True, 2: False, 3: True, 4: False})
+        board_size = 2
+        n = 4
+        cells = [cell_of_var(v, board_size) for v in range(1, n + 1)]
+        clues = [
+            Clue(
+                id="c1",
+                owner="A1",
+                type="FACT",
+                params={"target": "A1", "status": "CRIMINAL"},
+            ),
+            Clue(
+                id="c2",
+                owner="A1",
+                type="SAME_STATUS",
+                params={"cell1": "A1", "cell2": "B1"},
+            ),
+            Clue(
+                id="c3",
+                owner="A1",
+                type="FACT",
+                params={"target": "B1", "status": "INNOCENT"},
+            ),
+        ]
+        clauses = [[1], [-1, 2], [1, -2], [-2]]
+
+        semantic_models = [
+            dict(zip(cells, a))
+            for a in itertools.product([False, True], repeat=n)
+            if evaluate_all(clues, dict(zip(cells, a)), board_size)
+        ]
+        self.assertEqual(len(semantic_models), 0)
+
+        res = self.solver.solve(clauses, num_vars=n)
+        self.assertFalse(res.sat)
+        self.assertIsNone(res.model)
 
 
 if __name__ == "__main__":
