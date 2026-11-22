@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from copy import deepcopy
 from pathlib import Path
-
+from engine import board
 from engine.character import Character
 from engine.game_state import CRIMINAL, INNOCENT, GameEngine, PublicKB
 
@@ -35,7 +35,8 @@ class LoadPuzzleTest(unittest.TestCase):
         engine = loaded_engine()
         self.assertEqual([c.cell for c in engine.characters],
                          ["A1", "B1", "C1", "A2", "B2", "C2", "A3", "B3", "C3"])
-        self.assertEqual(engine.characters[0], Character("A1", "Abel", "Astronaut"))
+        cells = [c.cell for c in engine.characters]
+        self.assertEqual(cells, board.all_cells(engine.n))
 
     def test_characters_in_shuffled_order_are_sorted_on_load(self):
         data = p01()

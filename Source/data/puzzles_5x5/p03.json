@@ -1,0 +1,386 @@
+{
+ "n": 5,
+ "title": "Vụ án lâu đài bí ẩn",
+ "characters": [
+  {
+   "cell": "A1",
+   "name": "Agasa",
+   "profession": "Nhà phát minh",
+   "criminal": false,
+   "clue": {
+    "type": "FACT",
+    "target": "B5",
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "B1",
+   "name": "Ai",
+   "profession": "Nhà khoa học",
+   "criminal": true,
+   "clue": {
+    "type": "DIFFERENT_STATUS",
+    "cell1": "D1",
+    "cell2": "E1"
+   }
+  },
+  {
+   "cell": "C1",
+   "name": "Akai",
+   "profession": "Đặc vụ FBI",
+   "criminal": false,
+   "clue": {
+    "type": "COMPARE",
+    "region1": {
+     "type": "col",
+     "letter": "A"
+    },
+    "op": "GT",
+    "region2": {
+     "type": "row",
+     "number": 3
+    },
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "D1",
+   "name": "Amuro",
+   "profession": "Phục vụ quán cà phê",
+   "criminal": false,
+   "clue": {
+    "type": "EXACTLY",
+    "region": {
+     "type": "list",
+     "cells": [
+      "A4",
+      "C5"
+     ]
+    },
+    "k": 2,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "E1",
+   "name": "Ayumi",
+   "profession": "Học sinh",
+   "criminal": true,
+   "clue": {
+    "type": "COMPARE",
+    "region1": {
+     "type": "neighbors",
+     "cell": "E2"
+    },
+    "op": "GT",
+    "region2": {
+     "type": "list",
+     "cells": [
+      "A1",
+      "C2",
+      "D4"
+     ]
+    },
+    "status": "CRIMINAL"
+   }
+  },
+  {
+   "cell": "A2",
+   "name": "Chiba",
+   "profession": "Cảnh sát",
+   "criminal": true,
+   "clue": {
+    "type": "AT_LEAST",
+    "region": {
+     "type": "neighbors",
+     "cell": "B5"
+    },
+    "k": 5,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "B2",
+   "name": "Conan",
+   "profession": "Thám tử nhí",
+   "criminal": false,
+   "clue": {
+    "type": "FACT",
+    "target": "C2",
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "C2",
+   "name": "Genta",
+   "profession": "Học sinh",
+   "criminal": false,
+   "clue": {
+    "type": "SAME_STATUS",
+    "cell1": "A4",
+    "cell2": "A5"
+   }
+  },
+  {
+   "cell": "D2",
+   "name": "Heiji",
+   "profession": "Thám tử",
+   "criminal": true,
+   "clue": {
+    "type": "AT_MOST",
+    "region": {
+     "type": "list",
+     "cells": [
+      "A2",
+      "C3"
+     ]
+    },
+    "k": 0,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "E2",
+   "name": "Jodie",
+   "profession": "Giáo viên",
+   "criminal": false,
+   "clue": {
+    "type": "COMPARE",
+    "region1": {
+     "type": "col",
+     "letter": "C"
+    },
+    "op": "EQ",
+    "region2": {
+     "type": "neighbors",
+     "cell": "E3"
+    },
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "A3",
+   "name": "Kaito",
+   "profession": "Ảo thuật gia",
+   "criminal": true,
+   "clue": {
+    "type": "COMPARE",
+    "region1": {
+     "type": "neighbors",
+     "cell": "B5"
+    },
+    "op": "EQ",
+    "region2": {
+     "type": "row",
+     "number": 4
+    },
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "B3",
+   "name": "Kazuha",
+   "profession": "Võ sĩ Aikido",
+   "criminal": true,
+   "clue": {
+    "type": "AT_MOST",
+    "region": {
+     "type": "col",
+     "letter": "B"
+    },
+    "k": 3,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "C3",
+   "name": "Kogoro",
+   "profession": "Thám tử tư",
+   "criminal": true,
+   "clue": {
+    "type": "EXACTLY",
+    "region": {
+     "type": "row",
+     "number": 5
+    },
+    "k": 3,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "D3",
+   "name": "Makoto",
+   "profession": "Vận động viên Karate",
+   "criminal": false,
+   "clue": {
+    "type": "COMPARE",
+    "region1": {
+     "type": "neighbors",
+     "cell": "C2"
+    },
+    "op": "GT",
+    "region2": {
+     "type": "col",
+     "letter": "A"
+    },
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "E3",
+   "name": "Megure",
+   "profession": "Thanh tra",
+   "criminal": false,
+   "clue": {
+    "type": "EXACTLY",
+    "region": {
+     "type": "col",
+     "letter": "A"
+    },
+    "k": 3,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "A4",
+   "name": "Mitsuhiko",
+   "profession": "Học sinh",
+   "criminal": false,
+   "clue": {
+    "type": "DIFFERENT_STATUS",
+    "cell1": "A3",
+    "cell2": "D3"
+   }
+  },
+  {
+   "cell": "B4",
+   "name": "Ran",
+   "profession": "Nhà vô địch Karate",
+   "criminal": false,
+   "clue": {
+    "type": "AT_LEAST",
+    "region": {
+     "type": "neighbors",
+     "cell": "D5"
+    },
+    "k": 4,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "C4",
+   "name": "Sato",
+   "profession": "Cảnh sát",
+   "criminal": false,
+   "clue": {
+    "type": "PARITY",
+    "parity": "EVEN",
+    "region": {
+     "type": "col",
+     "letter": "E"
+    },
+    "status": "CRIMINAL"
+   }
+  },
+  {
+   "cell": "D4",
+   "name": "Shinichi",
+   "profession": "Thám tử học sinh",
+   "criminal": false,
+   "clue": {
+    "type": "SAME_STATUS",
+    "cell1": "D1",
+    "cell2": "E3"
+   }
+  },
+  {
+   "cell": "E4",
+   "name": "Shiratori",
+   "profession": "Thanh tra",
+   "criminal": false,
+   "clue": {
+    "type": "DIFFERENT_STATUS",
+    "cell1": "A2",
+    "cell2": "C5"
+   }
+  },
+  {
+   "cell": "A5",
+   "name": "Sonoko",
+   "profession": "Tiểu thư",
+   "criminal": false,
+   "clue": {
+    "type": "FACT",
+    "target": "E4",
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "B5",
+   "name": "Subaru",
+   "profession": "Sinh viên",
+   "criminal": false,
+   "clue": {
+    "type": "PARITY",
+    "parity": "ODD",
+    "region": {
+     "type": "col",
+     "letter": "C"
+    },
+    "status": "CRIMINAL"
+   }
+  },
+  {
+   "cell": "C5",
+   "name": "Takagi",
+   "profession": "Cảnh sát",
+   "criminal": false,
+   "clue": {
+    "type": "SAME_STATUS",
+    "cell1": "B2",
+    "cell2": "A4"
+   }
+  },
+  {
+   "cell": "D5",
+   "name": "Yukiko",
+   "profession": "Diễn viên",
+   "criminal": true,
+   "clue": {
+    "type": "FACT",
+    "target": "D1",
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "E5",
+   "name": "Yusaku",
+   "profession": "Tiểu thuyết gia",
+   "criminal": true,
+   "clue": {
+    "type": "COMPARE",
+    "region1": {
+     "type": "list",
+     "cells": [
+      "D1",
+      "D2",
+      "A3",
+      "D3",
+      "E4",
+      "E5"
+     ]
+    },
+    "op": "EQ",
+    "region2": {
+     "type": "col",
+     "letter": "A"
+    },
+    "status": "INNOCENT"
+   }
+  }
+ ],
+ "initially_revealed": [
+  "D5",
+  "E5"
+ ]
+}
