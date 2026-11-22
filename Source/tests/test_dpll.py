@@ -794,18 +794,32 @@ class TestDPLLPhase2Timeout(unittest.TestCase):
                 self.assertEqual(res.stats.propagations, 0)
                 self.assertEqual(res.stats.backtracks, 0)
 
-    def test_timeout_during_active_branching(self) -> None:
-        """Ngắt an toàn khi solver đang tích cực rẽ nhánh (dùng mock timer chống flaky)."""
-        clauses = [[1, 2], [-1, 3], [-1, -3]]
+    def test_timeout_on_hard_combinatorial_unsat(self) -> None:
+        """Kiểm tra ngắt an toàn trên bài toán khó (PHP 5/4: 5 chim, 4 chuồng, 20 biến, 45 clause).
+
+        Dùng mock timer để kiểm soát hoàn toàn, chống flaky: ngay khi solver đã thực hiện
+        ít nhất 1 quyết định phân nhánh (decisions > 0), mock timer báo quá deadline.
+        """
+        # PHP 5/4: var(p, h) = p * 4 + h + 1 (1 <= var <= 20)
+        clauses: List[List[int]] = []
+        # Mỗi chim phải ở ít nhất 1 chuồng (5 mệnh đề)
+        for p in range(5):
+            clauses.append([p * 4 + h + 1 for h in range(4)])
+        # Không có 2 chim trong cùng 1 chuồng (10 cặp chim * 4 chuồng = 40 mệnh đề)
+        for h in range(4):
+            for p1 in range(5):
+                for p2 in range(p1 + 1, 5):
+                    clauses.append([-(p1 * 4 + h + 1), -(p2 * 4 + h + 1)])
+
+        self.assertEqual(len(clauses), 45)
 
         def _mock_perf() -> float:
-            # Ngay khi solver đã phân nhánh ít nhất 1 lần, báo quá hạn deadline
             if self.solver.stats.decisions > 0:
                 return 200.0
             return 100.0
 
         with patch("time.perf_counter", side_effect=_mock_perf):
-            res = self.solver.solve(clauses, num_vars=3, timeout=1.0)
+            res = self.solver.solve(clauses, num_vars=20, timeout=1.0)
 
         self.assertTrue(res.timed_out)
         self.assertFalse(res.sat)
@@ -851,9 +865,16 @@ class TestDPLLPhase2Timeout(unittest.TestCase):
         self.assertGreater(res.stats.runtime, 0.0)
 
     def test_periodic_polling_batch_runtime_positive(self) -> None:
-        """Cơ chế kiểm tra deadline định kỳ đảm bảo runtime dương (timeout 1ms)."""
+        """Cơ chế kiểm tra deadline định kỳ đảm bảo ngắt an toàn và runtime > 0 (mock timer)."""
         large_clauses = [[1]] + [[-i, i + 1] for i in range(1, 8000)]
-        res = self.solver.solve(large_clauses, num_vars=8001, timeout=0.001)
+        t = [100.0]
+
+        def _mock_perf() -> float:
+            t[0] += 0.01
+            return t[0]
+
+        with patch("time.perf_counter", side_effect=_mock_perf):
+            res = self.solver.solve(large_clauses, num_vars=8001, timeout=0.05)
 
         self.assertTrue(res.timed_out)
         self.assertFalse(res.sat)
@@ -1025,7 +1046,7 @@ class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
                     all(self.solver.is_clause_satisfied(c, res.model) for c in clauses)
                 )
 
-    def test_basic_clue_cnf_patterns_against_brute_force(self) -> None:
+    def test_basic_clue_cnf_patterns_against_semantic_evaluator(self) -> None:
         """Kiểm chứng tích hợp mẫu CNF cơ bản (FACT, SAME, DIFFERENT) với semantic evaluator."""
         import itertools
         from engine.board import cell_of_var
