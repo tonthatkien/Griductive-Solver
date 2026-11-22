@@ -1016,9 +1016,7 @@ class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
                 for _ in range(m)
             ]
 
-            # Ranh giới kiểm thử: "D4 CNF thuần; C7 kiểm tra semantic ↔ encoder".
-            # Công thức ở đây là CNF ngẫu nhiên trừu tượng (biến số 1..n, không gắn với
-            # lưới hay clue cụ thể nào), nên không thể dùng semantic.evaluate.
+            # "D4 CNF thuần; C7 kiểm tra semantic ↔ encoder".
             # Hàm _sat_under kiểm tra chân trị mệnh đề độc lập để vét cạn nghiệm chuẩn.
             def _sat_under(assignment: Tuple[bool, ...]) -> bool:
                 return all(
@@ -1053,8 +1051,8 @@ class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
         from engine.clue import Clue
         from logic.semantic import evaluate_all
 
-        # Ranh giới kiểm thử: "D4 CNF thuần; C7 kiểm tra semantic ↔ encoder".
-        # Ở đây D4 dùng semantic.evaluate_all để kiểm chứng chéo 2 module độc lập
+        # "D4 CNF thuần; C7 kiểm tra semantic ↔ encoder".
+        # D4 dùng semantic.evaluate_all để kiểm chứng chéo 2 module độc lập
         # (DPLLSolver và semantic evaluator) trên các clue cơ bản.
         # Task C7 (tests/test_encoder_vs_semantic.py) sẽ kiểm tra toàn diện
         # sự tương đương giữa CNF Encoder và Semantic Evaluator cho mọi loại clue.
@@ -1096,7 +1094,7 @@ class TestDPLLPhase4BruteForceComparison(unittest.TestCase):
         ]
         self.assertEqual(len(semantic_models), 2)
 
-        # Giải tất cả nghiệm bằng DPLLSolver (dùng blocking clauses)
+        # Giải tất cả nghiệm bằng DPLLSolver, dùng blocking clauses
         dpll_models = []
         current_clauses = [list(c) for c in clauses]
         while True:
