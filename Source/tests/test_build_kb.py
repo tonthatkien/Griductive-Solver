@@ -1,5 +1,6 @@
 """Test C6: Encoder.build_kb = CNF(clue đã lật) ∧ unit clause của ô đã chứng minh."""
 import json
+import random
 import unittest
 from copy import deepcopy
 from pathlib import Path
@@ -10,10 +11,12 @@ from engine.constants import CRIMINAL, INCONSISTENT, INNOCENT, UNKNOWN
 from engine.game_state import GameEngine, PublicKB
 from logic.cnf_encoder import Encoder
 from logic.dpll import DPLLSolver
+from logic.semantic import evaluate
 
 P01_PATH = Path(__file__).resolve().parents[1] / "data" / "puzzles_3x3" / "p01.json"
 N = 3
 ROW1 = {"type": "row", "number": 1}
+COLA = {"type": "col", "letter": "A"}
 
 
 def p01_public_kb() -> PublicKB:
@@ -25,6 +28,28 @@ def p01_public_kb() -> PublicKB:
 def parity_clue(owner: str) -> Clue:
     return Clue(id=f"clue_{owner}", owner=owner, type="PARITY",
                 params={"region": ROW1, "parity": "ODD"})
+
+
+def compare_clue(owner: str) -> Clue:
+    return Clue(id=f"clue_{owner}", owner=owner, type="COMPARE",
+                params={"region1": ROW1, "region2": COLA, "op": "GT"})
+
+
+def fact_clue(owner: str) -> Clue:
+    return Clue(id=f"clue_{owner}", owner=owner, type="FACT",
+                params={"target": "B2", "status": CRIMINAL})
+
+
+def same_clue(owner: str) -> Clue:
+    return Clue(id=f"clue_{owner}", owner=owner, type="SAME_STATUS",
+                params={"cell1": "A1", "cell2": "C2"})
+
+
+def mixed_public_kb() -> PublicKB:
+    """FACT + PARITY + COMPARE + SAME: 13 biến phụ (1 của PARITY, 12 của COMPARE)."""
+    return PublicKB(N, revealed_clues=(fact_clue("A1"), parity_clue("B1"),
+                                       compare_clue("C1"), same_clue("A2")),
+                    proved={"A1": CRIMINAL})
 
 
 class TestBuildKbContent(unittest.TestCase):
@@ -160,6 +185,70 @@ class TestBuildKbFullPuzzle(unittest.TestCase):
         # blocking clause chỉ trên biến primary: không còn nghiệm thứ hai
         block = [-v if result.model[v] else v for v in primary]
         self.assertFalse(solver.solve(kb.clauses + [block], kb.num_vars).sat)
+
+
+class TestBuildKbMixedEncodings(unittest.TestCase):
+    def test_aux_vars_are_disjoint_across_encodings(self):
+        public = mixed_public_kb()
+        kb = Encoder(N).build_kb(public)
+        self.assertEqual(kb.num_aux, 13)
+        used = {abs(lit) for clause in kb.clauses for lit in clause}
+        self.assertEqual({v for v in used if v > 9}, set(range(10, 23)))
+
+    def test_kb_matches_semantic_on_sampled_assignments(self):
+        public = mixed_public_kb()
+        kb = Encoder(N).build_kb(public)
+        solver = DPLLSolver()
+        rng = random.Random(2026)
+        cells = board.all_cells(N)
+        # Mẫu thỏa chắc chắn: A1, B1, C1, B2, C2 criminal; còn lại innocent
+        satisfying = {c: c in ("A1", "B1", "C1", "B2", "C2") for c in cells}
+        samples = [satisfying] + [{c: rng.random() < 0.5 for c in cells} for _ in range(80)]
+        sat_seen = unsat_seen = 0
+        for assignment in samples:
+            assumptions = [board.var_of(c, N) if v else -board.var_of(c, N)
+                           for c, v in assignment.items()]
+            expected = assignment["A1"] and all(
+                evaluate(clue, assignment, N) for clue in public.revealed_clues)
+            with self.subTest(assignment=assignment):
+                result = solver.solve(kb.clauses, kb.num_vars, assumptions=assumptions)
+                self.assertEqual(result.sat, expected)
+            sat_seen += expected
+            unsat_seen += not expected
+        self.assertGreater(sat_seen, 0)
+        self.assertGreater(unsat_seen, 0)
+
+
+class TestBuildKbLifecycle(unittest.TestCase):
+    def test_reuse_with_changing_public_kb(self):
+        heavy = mixed_public_kb()
+        light = PublicKB(N, revealed_clues=(fact_clue("A1"), same_clue("B1")))
+        enc = Encoder(N)
+        first, second, third = enc.build_kb(heavy), enc.build_kb(light), enc.build_kb(heavy)
+        self.assertEqual((first.num_aux, second.num_aux, third.num_aux), (13, 0, 13))
+        self.assertEqual(second.num_vars, 9)
+        self.assertEqual(second.clauses, Encoder(N).build_kb(light).clauses)
+        self.assertEqual(third.clauses, first.clauses)
+        self.assertEqual(enc.new_aux(), 23)
+
+    def test_failed_build_does_not_affect_next_build(self):
+        good = mixed_public_kb()
+        expected = Encoder(N).build_kb(good)
+        bad_clue = Clue(id="clue_C2", owner="C2", type="FACT",
+                        params={"target": "D1", "status": CRIMINAL})
+        bad_cases = {
+            "invalid_clue_after_aux": PublicKB(N, revealed_clues=(parity_clue("A1"), bad_clue)),
+            "invalid_verdict_after_aux": PublicKB(N, revealed_clues=(parity_clue("A1"),),
+                                                  proved={"A1": UNKNOWN}),
+        }
+        for name, bad in bad_cases.items():
+            with self.subTest(case=name):
+                enc = Encoder(N)
+                with self.assertRaises(ValueError):
+                    enc.build_kb(bad)
+                after = enc.build_kb(good)
+                self.assertEqual(after.clauses, expected.clauses)
+                self.assertEqual(after.num_aux, expected.num_aux)
 
 
 if __name__ == "__main__":
