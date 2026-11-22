@@ -1,69 +1,136 @@
 {
-  "n": 3,
-  "characters": [
-    {
-      "cell": "A1",
-      "name": "Adam",
-      "profession": "Chef",
-      "criminal": true,
-      "clue": {"type": "SAME_STATUS", "cell1": "C1", "cell2": "C2"}
+ "n": 3,
+ "title": "Vụ án tại sở cảnh sát Tokyo",
+ "characters": [
+  {
+   "cell": "A1",
+   "name": "Agasa",
+   "profession": "Nhà phát minh",
+   "criminal": true,
+   "clue": {
+    "type": "SAME_STATUS",
+    "cell1": "C1",
+    "cell2": "C2"
+   }
+  },
+  {
+   "cell": "B1",
+   "name": "Ai",
+   "profession": "Nhà khoa học",
+   "criminal": false,
+   "clue": {
+    "type": "PARITY",
+    "parity": "ODD",
+    "region": {
+     "type": "neighbors",
+     "cell": "B1"
     },
-    {
-      "cell": "B1",
-      "name": "Beth",
-      "profession": "Teacher",
-      "criminal": false,
-      "clue": {"type": "PARITY", "parity": "ODD", "region": {"type": "neighbors", "cell": "B1"}, "status": "INNOCENT"}
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "C1",
+   "name": "Akai",
+   "profession": "Đặc vụ FBI",
+   "criminal": true,
+   "clue": {
+    "type": "PARITY",
+    "parity": "ODD",
+    "region": {
+     "type": "neighbors",
+     "cell": "C2"
     },
-    {
-      "cell": "C1",
-      "name": "Carl",
-      "profession": "Driver",
-      "criminal": true,
-      "clue": {"type": "PARITY", "parity": "ODD", "region": {"type": "neighbors", "cell": "C2"}, "status": "CRIMINAL"}
+    "status": "CRIMINAL"
+   }
+  },
+  {
+   "cell": "A2",
+   "name": "Amuro",
+   "profession": "Phục vụ quán cà phê",
+   "criminal": true,
+   "clue": {
+    "type": "AT_LEAST",
+    "region": {
+     "type": "neighbors",
+     "cell": "C1"
     },
-    {
-      "cell": "A2",
-      "name": "Dora",
-      "profession": "Astronaut",
-      "criminal": true,
-      "clue": {"type": "AT_LEAST", "region": {"type": "neighbors", "cell": "C1"}, "k": 2, "status": "INNOCENT"}
+    "k": 2,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "B2",
+   "name": "Chiba",
+   "profession": "Cảnh sát",
+   "criminal": false,
+   "clue": {
+    "type": "FACT",
+    "target": "A1",
+    "status": "CRIMINAL"
+   }
+  },
+  {
+   "cell": "C2",
+   "name": "Jodie",
+   "profession": "Giáo viên",
+   "criminal": true,
+   "clue": {
+    "type": "AT_MOST",
+    "region": {
+     "type": "neighbors",
+     "cell": "B2"
     },
-    {
-      "cell": "B2",
-      "name": "Evan",
-      "profession": "Sailor",
-      "criminal": false,
-      "clue": {"type": "FACT", "target": "A1", "status": "CRIMINAL"}
+    "k": 5,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "A3",
+   "name": "Kaito",
+   "profession": "Ảo thuật gia",
+   "criminal": false,
+   "clue": {
+    "type": "FACT",
+    "target": "B2",
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "B3",
+   "name": "Shiratori",
+   "profession": "Thanh tra",
+   "criminal": false,
+   "clue": {
+    "type": "COMPARE",
+    "region1": {
+     "type": "col",
+     "letter": "B"
     },
-    {
-      "cell": "C2",
-      "name": "Faye",
-      "profession": "Barber",
-      "criminal": true,
-      "clue": {"type": "AT_MOST", "region": {"type": "neighbors", "cell": "B2"}, "k": 5, "status": "INNOCENT"}
+    "op": "GT",
+    "region2": {
+     "type": "col",
+     "letter": "C"
     },
-    {
-      "cell": "A3",
-      "name": "George",
-      "profession": "Tailor",
-      "criminal": false,
-      "clue": {"type": "FACT", "target": "B2", "status": "INNOCENT"}
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "C3",
+   "name": "Subaru",
+   "profession": "Sinh viên",
+   "criminal": false,
+   "clue": {
+    "type": "EXACTLY",
+    "region": {
+     "type": "row",
+     "number": 3
     },
-    {
-      "cell": "B3",
-      "name": "Holly",
-      "profession": "Clerk",
-      "criminal": false,
-      "clue": {"type": "COMPARE", "region1": {"type": "col", "letter": "B"}, "op": "GT", "region2": {"type": "col", "letter": "C"}, "status": "INNOCENT"}
-    },
-    {
-      "cell": "C3",
-      "name": "Ian",
-      "profession": "Banker",
-      "criminal": false,
-      "clue": {"type": "EXACTLY", "region": {"type": "row", "number": 3}, "k": 0, "status": "CRIMINAL"}
-    }
-  ],
-  "initially_revealed": ["C3"]
+    "k": 0,
+    "status": "CRIMINAL"
+   }
+  }
+ ],
+ "initially_revealed": [
+  "C3"
+ ]
 }

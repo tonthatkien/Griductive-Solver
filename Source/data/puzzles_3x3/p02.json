@@ -1,69 +1,148 @@
 {
-  "n": 3,
-  "characters": [
-    {
-      "cell": "A1",
-      "name": "Aiden",
-      "profession": "Engineer",
-      "criminal": false,
-      "clue": {"type": "EXACTLY", "region": {"type": "col", "letter": "A"}, "k": 0, "status": "CRIMINAL"}
+ "n": 3,
+ "title": "Vụ án biệt thự trên đồi",
+ "characters": [
+  {
+   "cell": "A1",
+   "name": "Conan",
+   "profession": "Thám tử nhí",
+   "criminal": false,
+   "clue": {
+    "type": "EXACTLY",
+    "region": {
+     "type": "col",
+     "letter": "A"
     },
-    {
-      "cell": "B1",
-      "name": "Bella",
-      "profession": "Artist",
-      "criminal": false,
-      "clue": {"type": "PARITY", "parity": "EVEN", "region": {"type": "neighbors", "cell": "C1"}, "status": "INNOCENT"}
+    "k": 0,
+    "status": "CRIMINAL"
+   }
+  },
+  {
+   "cell": "B1",
+   "name": "Makoto",
+   "profession": "Vận động viên Karate",
+   "criminal": false,
+   "clue": {
+    "type": "PARITY",
+    "parity": "EVEN",
+    "region": {
+     "type": "neighbors",
+     "cell": "C1"
     },
-    {
-      "cell": "C1",
-      "name": "Caleb",
-      "profession": "Driver",
-      "criminal": true,
-      "clue": {"type": "AT_LEAST", "region": {"type": "neighbors", "cell": "C2"}, "k": 2, "status": "INNOCENT"}
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "C1",
+   "name": "Megure",
+   "profession": "Thanh tra",
+   "criminal": true,
+   "clue": {
+    "type": "AT_LEAST",
+    "region": {
+     "type": "neighbors",
+     "cell": "C2"
     },
-    {
-      "cell": "A2",
-      "name": "Diana",
-      "profession": "Singer",
-      "criminal": false,
-      "clue": {"type": "SAME_STATUS", "cell1": "C2", "cell2": "B3"}
+    "k": 2,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "A2",
+   "name": "Sato",
+   "profession": "Cảnh sát",
+   "criminal": false,
+   "clue": {
+    "type": "SAME_STATUS",
+    "cell1": "C2",
+    "cell2": "B3"
+   }
+  },
+  {
+   "cell": "B2",
+   "name": "Shinichi",
+   "profession": "Thám tử học sinh",
+   "criminal": false,
+   "clue": {
+    "type": "FACT",
+    "target": "A1",
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "C2",
+   "name": "Sonoko",
+   "profession": "Tiểu thư",
+   "criminal": true,
+   "clue": {
+    "type": "EXACTLY",
+    "region": {
+     "type": "neighbors",
+     "cell": "C1"
     },
-    {
-      "cell": "B2",
-      "name": "Ethan",
-      "profession": "Farmer",
-      "criminal": false,
-      "clue": {"type": "FACT", "target": "A1", "status": "INNOCENT"}
+    "k": 2,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "A3",
+   "name": "Takagi",
+   "profession": "Cảnh sát",
+   "criminal": false,
+   "clue": {
+    "type": "DIFFERENT_STATUS",
+    "cell1": "C1",
+    "cell2": "A2"
+   }
+  },
+  {
+   "cell": "B3",
+   "name": "Yukiko",
+   "profession": "Diễn viên",
+   "criminal": true,
+   "clue": {
+    "type": "COMPARE",
+    "region1": {
+     "type": "row",
+     "number": 1
     },
-    {
-      "cell": "C2",
-      "name": "Fiona",
-      "profession": "Poet",
-      "criminal": true,
-      "clue": {"type": "EXACTLY", "region": {"type": "neighbors", "cell": "C1"}, "k": 2, "status": "INNOCENT"}
+    "op": "EQ",
+    "region2": {
+     "type": "list",
+     "cells": [
+      "A1",
+      "C2",
+      "B3",
+      "C3"
+     ]
     },
-    {
-      "cell": "A3",
-      "name": "Gabe",
-      "profession": "Doctor",
-      "criminal": false,
-      "clue": {"type": "DIFFERENT_STATUS", "cell1": "C1", "cell2": "A2"}
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "C3",
+   "name": "Yusaku",
+   "profession": "Tiểu thuyết gia",
+   "criminal": false,
+   "clue": {
+    "type": "AT_MOST",
+    "region": {
+     "type": "list",
+     "cells": [
+      "C1",
+      "A2",
+      "C2",
+      "A3",
+      "B3"
+     ]
     },
-    {
-      "cell": "B3",
-      "name": "Hazel",
-      "profession": "Teacher",
-      "criminal": true,
-      "clue": {"type": "COMPARE", "region1": {"type": "row", "number": 1}, "op": "EQ", "region2": {"type": "list", "cells": ["A1", "C2", "B3", "C3"]}, "status": "INNOCENT"}
-    },
-    {
-      "cell": "C3",
-      "name": "Isaac",
-      "profession": "Clerk",
-      "criminal": false,
-      "clue": {"type": "AT_MOST", "region": {"type": "list", "cells": ["C1", "A2", "C2", "A3", "B3"]}, "k": 2, "status": "INNOCENT"}
-    }
-  ],
-  "initially_revealed": ["C2", "A3"]
+    "k": 2,
+    "status": "INNOCENT"
+   }
+  }
+ ],
+ "initially_revealed": [
+  "C2",
+  "A3"
+ ]
 }
