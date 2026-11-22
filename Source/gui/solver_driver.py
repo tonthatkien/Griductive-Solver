@@ -1,14 +1,19 @@
-"""Chạy MỘT bước suy luận của Agent để GUI hiển thị từng bước (Auto Solve / Step / Pause).
+"""Chạy MỘT bước suy luận của Agent để GUI hiển thị từng bước (Auto Solve / Step / Pause). (Scope F)
 
 Không phụ thuộc Qt. Chỉ dùng API công khai theo docs/INTERFACES.md:
-  agent.next_forced(public_kb), engine.submit_verdict(cell, verdict, agent.classify)
-Nếu LogicAgent sau này có `step(engine) -> TraceEntry | None` thì driver dùng luôn
-(đề xuất cho E2/E3: trace thật gồm SAT queries; hiện fallback chỉ tóm tắt theo định nghĩa).
+  engine.get_public_kb(), engine.submit_verdict(cell, verdict, agent.classify),
+  agent.next_forced(public_kb), agent.classify(public_kb, cell)
+Nếu LogicAgent có `step(engine) -> TraceEntry | None` thì driver dùng luôn để lấy trace thật
+(gồm SAT queries). Chưa có thì fallback: trace chỉ tóm tắt SAT query theo định nghĩa entailment.
+
+Việc còn lại / chưa giải được suy ra từ PublicKB (cell chưa có trong kb.proved),
+KHÔNG dùng hàm riêng của engine giả (unsolved_cells...) và KHÔNG đọc dữ liệu ẩn.
 """
 import time
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
+from engine import board
 from engine.game_state import ACCEPTED, CRIMINAL, INCONSISTENT, PublicKB
 from logic.agent import TraceEntry
 
@@ -39,11 +44,17 @@ def _clue_ids(kb: PublicKB) -> List[str]:
     return [c.id for c in kb.revealed_clues]
 
 
+def unsolved_cells(kb: PublicKB) -> List[str]:
+    """Các ô chưa được chứng minh, row-major, tính từ PublicKB."""
+    return [c for c in board.all_cells(kb.n) if c not in kb.proved]
+
+
 def run_step(engine, agent, step_no: int) -> StepResult:
     """Thực hiện một bước: chọn ô forced đầu tiên (row-major) và gửi verdict cho engine."""
-    if not engine.unsolved_cells():
-        return StepResult(SOLVED)
     kb = engine.get_public_kb()
+    pending = unsolved_cells(kb)
+    if not pending:
+        return StepResult(SOLVED)
     before_ids, counters, t0 = _clue_ids(kb), agent_counters(agent), time.perf_counter()
     step_fn = getattr(agent, "step", None)
     summarized = False
@@ -63,8 +74,7 @@ def run_step(engine, agent, step_no: int) -> StepResult:
                                sat_queries=[(f"KB ∧ {refuted}", "UNSAT")])
     runtime_ms = (time.perf_counter() - t0) * 1000
     if entry is None:
-        first = engine.unsolved_cells()[0]
-        status = INCONSISTENT if agent.classify(kb, first) == INCONSISTENT else STUCK
+        status = INCONSISTENT if agent.classify(kb, pending[0]) == INCONSISTENT else STUCK
         return StepResult(status, deltas=_diff(counters, agent_counters(agent)),
                           runtime_ms=runtime_ms)
     after = engine.get_public_kb()

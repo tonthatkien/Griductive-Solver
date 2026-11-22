@@ -3,6 +3,9 @@
 GUI KHÔNG chứa luật chơi hay suy luận: mọi verdict đi qua engine.submit_verdict(..., agent.classify),
 Hint qua agent.hint(public_kb), Auto Solve qua gui.solver_driver.run_step. Việc nặng chạy ở QThread.
 Phần chơi tay ở app_play.py, phần Auto Solve ở app_auto.py.
+
+Engine thật (engine/game_state.py): `engine.characters` là tuple[Character] công khai,
+`engine.n`, `engine.get_public_kb()`, `engine.load_puzzle(path)`, `engine.restart()`.
 """
 from pathlib import Path
 from typing import Callable, Dict, Optional
@@ -26,9 +29,9 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 
 class MainWindow(PlayMixin, AutoMixin, QMainWindow):
-    def __init__(self, engine, agent, puzzle_path: Optional[str] = None, demo: bool = False) -> None:
+    def __init__(self, engine, agent, puzzle_path: Optional[str] = None) -> None:
         super().__init__()
-        self.engine, self.agent, self.demo = engine, agent, demo
+        self.engine, self.agent = engine, agent
         self.kb: Optional[PublicKB] = None
         self.names: Dict[str, str] = {}
         self._task: Optional[Task] = None
@@ -38,7 +41,7 @@ class MainWindow(PlayMixin, AutoMixin, QMainWindow):
         self._step_no, self._dpll_ms = 0, 0.0
         self._baseline = agent_counters(agent)
         self._hint_cell: Optional[str] = None
-        self.setWindowTitle("Griductive · Conan Case File" + ("  [DEMO BACKEND]" if demo else ""))
+        self.setWindowTitle("Griductive · Conan Case File")
         self.resize(1380, 880)
         self.setMinimumSize(1120, 740)
         self.sound = SoundManager(self)
@@ -49,7 +52,7 @@ class MainWindow(PlayMixin, AutoMixin, QMainWindow):
         self._hint_timer = QTimer(self)
         self._hint_timer.setSingleShot(True)
         self._hint_timer.timeout.connect(self._clear_hint)
-        if puzzle_path or demo:
+        if puzzle_path:
             QTimer.singleShot(0, lambda: self._load(puzzle_path))
         else:
             QTimer.singleShot(0, self._on_load)
@@ -197,7 +200,10 @@ class MainWindow(PlayMixin, AutoMixin, QMainWindow):
         self._stop_auto()
         if isinstance(exc, NotImplementedError):
             text = ("Engine/Agent chưa cài đặt hàm này (NotImplementedError).\n"
-                    "Chạy `python main.py --demo` để xem giao diện với backend giả.")
+                    "Kiểm tra nhánh main đã có E1/E2/E5 (logic/agent.py) chưa.")
+        elif isinstance(exc, AssertionError):
+            text = ("Agent hoặc engine vi phạm hợp đồng (AssertionError): "
+                    f"{exc}\nĐây là lỗi logic của nhóm, không phải lỗi giao diện.")
         else:
             text = f"{type(exc).__name__}: {exc}"
         self._say(text, "bad")
@@ -210,15 +216,15 @@ class MainWindow(PlayMixin, AutoMixin, QMainWindow):
         if path:
             self._load(path)
 
-    def _load(self, path: Optional[str]) -> None:
+    def _load(self, path: str) -> None:
         self._stop_auto()
         try:
             self.engine.load_puzzle(path)
-        except Exception as exc:        # noqa: BLE001
+        except Exception as exc:        # noqa: BLE001 - puzzle sai: engine giữ nguyên ván cũ
             self._show_error(exc)
             return
-        self.case_label.setText(f"Hồ sơ #{Path(path).stem.upper() if path else 'DEMO'}"
-                                + (f" · {self.engine.title}" if getattr(self.engine, "title", "") else ""))
+        n = self.engine.n
+        self.case_label.setText(f"Hồ sơ #{Path(path).stem.upper()} · {n}×{n}")
         self._after_reset()
 
     def _on_restart(self) -> None:
@@ -231,9 +237,10 @@ class MainWindow(PlayMixin, AutoMixin, QMainWindow):
         self._after_reset()
 
     def _after_reset(self) -> None:
-        n, chars = self.engine.n, self.engine.characters
-        self.names = {cell: chars[cell].name for cell in chars}
-        self.grid.set_board(n, {cell: (chars[cell].name, chars[cell].profession) for cell in chars})
+        n = self.engine.n
+        chars = self.engine.characters                      # tuple[Character], row-major
+        self.names = {ch.cell: ch.name for ch in chars}
+        self.grid.set_board(n, {ch.cell: (ch.name, ch.profession) for ch in chars})
         self.notebook.reset()
         self._baseline = agent_counters(self.agent)
         self._step_no, self._dpll_ms, self._hint_cell = 0, 0.0, None
