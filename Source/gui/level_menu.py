@@ -273,10 +273,17 @@ class LevelMenu(QWidget):
         return self._static
 
     def _build_static(self, w: float, h: float, dpr: float) -> QPixmap:
-        """Nền đêm, lưới đường phố, khối nhà sáng đèn, công viên, dòng sông, tọa độ, vignette."""
         pix = QPixmap(int(w * dpr) + 1, int(h * dpr) + 1)
         pix.setDevicePixelRatio(dpr)
         g = QPainter(pix)
+        try:
+            self._draw_static(g, w, h)
+        finally:                       # lỗi giữa chừng cũng phải đóng painter, tránh lỗi dây chuyền
+            g.end()
+        return pix
+
+    def _draw_static(self, g: QPainter, w: float, h: float) -> None:
+        """Nền đêm, lưới đường phố, khối nhà sáng đèn, công viên, dòng sông, tọa độ, vignette."""
         g.setRenderHint(QPainter.RenderHint.Antialiasing)
         g.setRenderHint(QPainter.RenderHint.TextAntialiasing)
         rng = random.Random(2026)
@@ -300,7 +307,7 @@ class LevelMenu(QWidget):
         river = QPainterPath(QPointF(-50, h * 0.78))
         river.cubicTo(QPointF(w * 0.3, h * 0.55), QPointF(w * 0.62, h * 1.02),
                       QPointF(w + 50, h * 0.66))
-        samples = [(pt.x(), pt.y()) for pt in (river.pointAtPercent(i / 80) for i in range(81))]
+        samples = [river.pointAtPercent(i / 80) for i in range(81)]
         park = QRectF(w * 0.40, h * 0.12, 260, 150)
 
         for k, line in enumerate(xs):                      # đường phố (đại lộ sáng hơn)
@@ -319,8 +326,8 @@ class LevelMenu(QWidget):
                 cx, cy = bx + bw / 2, by + bh / 2
                 if park.contains(QPointF(cx, cy)):
                     continue
-                if any(math.hypot(cx - sx, cy - sy) < 58 + 0.25 * max(bw, bh)
-                       for sx, sy in samples):
+                if any(math.hypot(cx - s.x(), cy - s.y()) < 58 + 0.25 * max(bw, bh)
+                       for s in samples):
                     continue
                 shade = rng.randint(0, 10)
                 g.setPen(pen(QColor(34, 58, 108, 150), 1))
@@ -373,8 +380,6 @@ class LevelMenu(QWidget):
         vignette.setColorAt(0.55, QColor(0, 0, 0, 0))
         vignette.setColorAt(1.0, QColor(0, 0, 0, 170))
         g.fillRect(full, QBrush(vignette))
-        g.end()
-        return pix
 
     # ---- vẽ động ------------------------------------------------------------------------
     def paintEvent(self, _event) -> None:
@@ -617,7 +622,10 @@ class LevelMenu(QWidget):
         pin = self._pins[idx]
         lv, stars = pin.level, self._stars(pin.level)
         accent = QColor(ACCENT_SEALED if lv.sealed else ACCENT_DONE if stars else ACCENT_NEW)
-        cw, ch = 276.0, 206.0
+        n = lv.n
+        cell, gap_c = min(20.0, 96.0 / n), 3.0
+        grid_h = n * cell + (n - 1) * gap_c
+        cw, ch = 276.0, 92.0 + grid_h + 58.0        # cao theo lưới: lưới 5x5 cao hơn 3x3
         gap = pin.radius * 1.6 + 16
         x = pin.center.x() + gap
         if x + cw > self.width() - 12:
@@ -646,8 +654,6 @@ class LevelMenu(QWidget):
         draw_fitted(p, QRectF(card.left() + 14, card.top() + 60, cw - 28, 20), lv.place,
                     theme.FONT_DOSSIER, 13, 9, "#b9c6e6", italic=True, fl=ALIGN_LEFT_MID)
 
-        n = lv.n
-        cell, gap_c = min(20.0, 96.0 / n), 3.0
         gx, gy = card.left() + 16, card.top() + 92
         p.setFont(make_font(theme.FONT_GADGET, cell * 0.62, True))
         for row in range(n):
@@ -673,7 +679,7 @@ class LevelMenu(QWidget):
             p.drawText(QRectF(tx, gy + i * 22, card.right() - tx - 10, 20), ALIGN_LEFT_MID, text)
         if not lv.sealed:
             for s in range(MAX_STARS):
-                self._star(p, card.left() + 28 + s * 24, card.bottom() - 50, 9.0, s < stars)
+                self._star(p, gx + 12 + s * 24, gy + grid_h + 16, 9.0, s < stars)   # ngay dưới lưới
         blink = 0.55 + 0.45 * math.sin(t * 5)
         foot = QColor(theme.CYAN_LASER)
         foot.setAlpha(int(255 * blink))

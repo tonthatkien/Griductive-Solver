@@ -1,6 +1,7 @@
 """PlayMixin: người chơi chọn clue, đoán verdict, xin Hint. (Scope F)
 
 Mixin của MainWindow: dùng self.engine, self.agent, self.grid, ... do MainWindow khai báo.
+Đếm số lần bị từ chối verdict (_wrong_attempts) và số lần xin Hint (_hints_used) để tính sao.
 """
 import time
 from typing import Optional
@@ -88,6 +89,7 @@ class PlayMixin:
                 QTimer.singleShot(1100, lambda: self._select_clue(clue.id))
             self._after_progress()
         elif status == NOT_PROVABLE:
+            self._wrong_attempts += 1
             card.shake()
             self.sound.play("not_provable")
             self.toast.popup("Chưa đủ bằng chứng!", "shake")
@@ -95,6 +97,7 @@ class PlayMixin:
             self._say(f"NOT_PROVABLE: với manh mối hiện có, chưa ép buộc được {who} là {word} "
                       f"(cũng chưa ép buộc điều ngược lại). Thẻ vẫn úp.", "warn")
         elif status == CONTRADICTED:
+            self._wrong_attempts += 1
             card.shake()
             self.effect.play("contradict")
             self.sound.play("thunder")
@@ -119,6 +122,7 @@ class PlayMixin:
             self.conan.say("Hiện chưa ai bị ép buộc bởi manh mối đang có.", "shake")
             self._say("Hint: chưa có ô nào có thể chứng minh được ngay (agent sẽ dừng ở STUCK).", "warn")
             return
+        self._hints_used += 1
         self.sound.play("hint")
         cell, _verdict, clue_ids = result            # cố ý KHÔNG hiển thị verdict
         self._hint_cell = cell
