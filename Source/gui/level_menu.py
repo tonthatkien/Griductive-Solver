@@ -14,10 +14,10 @@ import random
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
-from PySide6.QtCore import QEasingCurve, QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import (QBrush, QColor, QLinearGradient, QPainter, QPainterPath, QPixmap,
+from PySide6.QtCore import QEasingCurve, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import (QBrush, QColor, QFontMetricsF, QLinearGradient, QPainter, QPainterPath, QPixmap,
                            QPolygonF, QRadialGradient)
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from gui import icons, theme
 from gui.anim import Tween, clock
@@ -54,6 +54,113 @@ class _District:
     start: int            # chỉ số ghim đầu tiên của khu trong LevelMenu._pins
 
 
+class _HeaderChip(QWidget):
+    """Ô thông tin ở hàng đầu bản đồ, cùng phong cách neon với ghim và bảng khu phố.
+
+    kind: 'hint'  = lời nhắc (chấm cyan nhấp nháy + chữ mono giãn cách)
+          'cases' = số vụ đã phá (huy hiệu + nhãn + số lớn)
+          'stars' = tổng số sao (ngôi sao + nhãn + số lớn)
+    """
+
+    def __init__(self, kind: str, label: str = "", parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.kind, self.label = kind, label
+        self.done, self.total = 0, 0
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        clock().tick.connect(self._on_tick)
+
+    def _on_tick(self) -> None:
+        if self.isVisible():
+            self.update()
+
+    def set_value(self, done: int, total: int) -> None:
+        self.done, self.total = done, total
+        self.updateGeometry()
+        self.update()
+
+    def _accent(self) -> QColor:
+        if self.kind == "hint":
+            return QColor(theme.CYAN_LASER)
+        if self.total and self.done >= self.total:
+            return QColor(theme.GOLD_SOFT)
+        return QColor(ACCENT_DONE if self.kind == "cases" else theme.GOLD)
+
+    def sizeHint(self) -> QSize:
+        if self.kind == "hint":
+            fm = QFontMetricsF(make_font(theme.FONT_MONO, 12, True, spacing=1.6))
+            return QSize(int(fm.horizontalAdvance(self.label.upper())) + 58, 36)
+        lab = QFontMetricsF(make_font(theme.FONT_MONO, 10, True, spacing=1.4))
+        val = QFontMetricsF(make_font(theme.FONT_GADGET, 20, True))
+        return QSize(int(lab.horizontalAdvance(self.label) + val.horizontalAdvance(f"{self.done}/{self.total}")) + 82,
+                     36)
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    def paintEvent(self, _event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        t = clock().t
+        accent = self._accent()
+        breath = 0.5 + 0.5 * math.sin(t * 2.0 + (0.0 if self.kind != "stars" else 1.3))
+        r = QRectF(3, 3, self.width() - 6, self.height() - 6)
+        plate = QPainterPath()
+        plate.addRoundedRect(r, 9, 9)
+        bg = QLinearGradient(r.topLeft(), r.bottomLeft())
+        bg.setColorAt(0, QColor(14, 28, 62, 225))
+        bg.setColorAt(1, QColor(5, 10, 24, 235))
+        p.fillPath(plate, QBrush(bg))
+        p.setBrush(NO_BRUSH)
+        halo = QColor(accent)
+        halo.setAlpha(int(22 + 22 * breath))
+        p.setPen(pen(halo, 5))
+        p.drawPath(plate)
+        edge = QColor(accent)
+        edge.setAlpha(190)
+        p.setPen(pen(edge, 1.5))
+        p.drawPath(plate)
+        draw_brackets(p, r.adjusted(-2, -2, 2, 2), accent.lighter(135), 7, 1.4)
+
+        if self.kind == "hint":
+            c = QPointF(r.left() + 17, r.center().y())
+            ring = QColor(accent)
+            ring.setAlpha(int(140 * (1 - (t * 0.8) % 1.0)))
+            p.setPen(pen(ring, 1.5))
+            p.drawEllipse(c, 4 + 6 * ((t * 0.8) % 1.0), 4 + 6 * ((t * 0.8) % 1.0))   # sóng lan như ghim chưa phá
+            p.setPen(NO_PEN)
+            p.setBrush(accent)
+            p.drawEllipse(c, 3.6, 3.6)
+            p.setFont(make_font(theme.FONT_MONO, 12, True, spacing=1.6))
+            p.setPen(QColor("#bff6ff"))
+            p.drawText(QRectF(r.left() + 32, r.top(), r.width() - 38, r.height()), ALIGN_LEFT_MID,
+                       self.label.upper())
+            p.end()
+            return
+
+        icon = QRectF(r.left() + 10, r.center().y() - 11, 22, 22)
+        if self.kind == "cases":
+            icons.draw_badge(p, icon)
+        else:
+            glow = QRadialGradient(icon.center(), 15)
+            glow.setColorAt(0, QColor(255, 214, 80, int(80 + 60 * breath)))
+            glow.setColorAt(1, QColor(255, 214, 80, 0))
+            p.setPen(NO_PEN)
+            p.setBrush(QBrush(glow))
+            p.drawEllipse(icon.center(), 15, 15)
+            p.setBrush(QColor(theme.GOLD_SOFT))
+            p.drawPolygon(icons.star_polygon(icon.center().x(), icon.center().y(), 10.5, 4.4))
+        p.setFont(make_font(theme.FONT_MONO, 10, True, spacing=1.4))
+        p.setPen(QColor("#7fdcff"))
+        lab_w = QFontMetricsF(p.font()).horizontalAdvance(self.label) + 4
+        p.drawText(QRectF(icon.right() + 8, r.top(), lab_w, r.height()), ALIGN_LEFT_MID, self.label)
+        val_x = icon.right() + 8 + lab_w + 6
+        draw_neon_text(p, QRectF(val_x, r.top(), r.right() - val_x - 10, r.height()),
+                       f"{self.done}/{self.total}", make_font(theme.FONT_GADGET, 20, True),
+                       accent.lighter(125), accent, 0.7 + 0.3 * breath, ALIGN_LEFT_MID)
+        p.end()
+
+
 class LevelMenu(QWidget):
     """Trang chọn màn."""
 
@@ -87,15 +194,16 @@ class LevelMenu(QWidget):
         root.setSpacing(0)
         header = QHBoxLayout()
         title = NeonTitle("CASE MAP", px=30, spacing=6.0)
-        self.sub_label = QLabel("Chọn một địa điểm để bắt đầu điều tra")
-        self.sub_label.setObjectName("subtitle")
-        self.stats_label = QLabel("")
-        self.stats_label.setObjectName("subtitle")
+        self.sub_label = _HeaderChip("hint", "Chọn một địa điểm để điều tra")
+        self.cases_chip = _HeaderChip("cases", "ĐÃ PHÁ")
+        self.stars_chip = _HeaderChip("stars", "SAO")
         header.addWidget(title)
         header.addSpacing(16)
         header.addWidget(self.sub_label)
         header.addStretch(1)
-        header.addWidget(self.stats_label)
+        header.addWidget(self.cases_chip)
+        header.addSpacing(10)
+        header.addWidget(self.stars_chip)
         root.addLayout(header)
         root.addStretch(1)
         self.conan = ConanWidget(plate=True)
@@ -104,7 +212,7 @@ class LevelMenu(QWidget):
         footer.addWidget(self.conan)
         footer.addStretch(1)
         root.addLayout(footer)
-        for widget in (title, self.sub_label, self.stats_label, self.conan):
+        for widget in (title, self.sub_label, self.cases_chip, self.stars_chip, self.conan):
             widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)   # chuột về menu
         self.conan.say(WELCOME, "think")
 
@@ -124,8 +232,8 @@ class LevelMenu(QWidget):
         normal = [lv for lv in self._levels if not lv.sealed]
         done = sum(1 for lv in normal if self._stars(lv) > 0)
         stars = sum(self._stars(lv) for lv in normal)
-        self.stats_label.setText(f"Đã phá {done}/{len(normal)} vụ án   ·   "
-                                 f"Sao {stars}/{MAX_STARS * len(normal)}")
+        self.cases_chip.set_value(done, len(normal))
+        self.stars_chip.set_value(stars, MAX_STARS * len(normal))
         self.update()
 
     def _stars(self, level: Level) -> int:
@@ -405,7 +513,7 @@ class LevelMenu(QWidget):
                 ([active] if active >= 0 else []):
             self._paint_pin(p, i, t)
         for d in self._districts:
-            self._paint_banner(p, d)
+            self._paint_banner(p, d, t)
         self._paint_legend(p, w, h)
         if active >= 0:
             self._paint_preview(p, active, t)
@@ -463,19 +571,104 @@ class LevelMenu(QWidget):
                 p.setPen(dash)
                 p.drawPath(path)
 
-    def _paint_banner(self, p: QPainter, d: _District) -> None:
-        r = QRectF(d.panel.left() + 10, d.panel.top() + 10, d.panel.width() - 20, 48)
-        p.setBrush(QColor(6, 12, 28, 235))
-        p.setPen(pen(theme.GOLD, 1.6))
-        p.drawRoundedRect(r, 9, 9)
+    def _paint_banner(self, p: QPainter, d: _District, t: float) -> None:
+        """Bảng tên khu phố: huy hiệu số khu (cùng phong cách ghim) + tên neon + thanh tiến độ chia đoạn."""
+        r = QRectF(d.panel.left() + 10, d.panel.top() + 8, d.panel.width() - 20, 54)
         normal = [lv for lv in d.levels if not lv.sealed]
         done = sum(1 for lv in normal if self._stars(lv) > 0)
-        title = f"KHU {d.index + 1} · {DIFFICULTY_VN.get(d.n, 'THÁM TỬ')}"
-        draw_fitted(p, QRectF(r.left() + 12, r.top() + 4, r.width() - 24, 22), title,
-                    theme.FONT_GADGET, 14, 9, theme.GOLD_SOFT, bold=True, fl=ALIGN_LEFT_MID)
-        draw_fitted(p, QRectF(r.left() + 12, r.top() + 26, r.width() - 24, 18),
-                    f"LƯỚI {d.n}×{d.n} · {done}/{len(normal)} ĐÃ PHÁ", theme.FONT_MONO, 12, 8,
-                    "#7fdcff", fl=ALIGN_LEFT_MID)
+        total = len(normal)
+        complete = total > 0 and done == total
+        gold = QColor(theme.GOLD)
+        p.save()
+        # nền + quầng viền
+        plate = QPainterPath()
+        plate.addRoundedRect(r, 10, 10)
+        bg = QLinearGradient(r.topLeft(), r.bottomLeft())
+        bg.setColorAt(0, QColor(14, 28, 62, 240))
+        bg.setColorAt(1, QColor(5, 10, 24, 245))
+        p.fillPath(plate, QBrush(bg))
+        p.setBrush(NO_BRUSH)
+        breath = 0.5 + 0.5 * math.sin(t * 1.6 + d.index)
+        halo = QColor(gold)
+        halo.setAlpha(int((50 if complete else 22) + (40 if complete else 16) * breath))
+        p.setPen(pen(halo, 6))
+        p.drawPath(plate)
+        p.setPen(pen(gold, 1.6))
+        p.drawPath(plate)
+        # vệt sáng quét ngang qua bảng
+        p.save()
+        p.setClipPath(plate)
+        sweep_x = r.left() - 60 + ((t * 0.28 + d.index * 0.37) % 1.0) * (r.width() + 120)
+        sheen = QLinearGradient(sweep_x - 40, 0, sweep_x + 40, 0)
+        sheen.setColorAt(0, QColor(255, 235, 150, 0))
+        sheen.setColorAt(0.5, QColor(255, 235, 150, 34))
+        sheen.setColorAt(1, QColor(255, 235, 150, 0))
+        p.fillRect(r, QBrush(sheen))
+        p.restore()
+        draw_brackets(p, r.adjusted(-3, -3, 3, 3), QColor(theme.GOLD_SOFT), 9, 1.6)
+
+        # huy hiệu số khu: cùng ngôn ngữ với ghim (nền cầu tối, viền vàng, vòng radar xoay)
+        c = QPointF(r.left() + 30, r.top() + 24)
+        br = 16.0
+        ring = pen(QColor(243, 211, 107, 150), 1.4)
+        ring.setDashPattern([2.0, 3.0])
+        ring.setDashOffset(-t * 4.0)
+        p.setBrush(NO_BRUSH)
+        p.setPen(ring)
+        p.drawEllipse(c, br + 5, br + 5)
+        body = QRadialGradient(QPointF(c.x(), c.y() - br * 0.4), br * 1.6)
+        body.setColorAt(0, QColor("#2a4378"))
+        body.setColorAt(1, QColor("#0a1226"))
+        p.setBrush(QBrush(body))
+        p.setPen(pen(gold, 2.4))
+        p.drawEllipse(c, br, br)
+        draw_neon_text(p, QRectF(c.x() - br, c.y() - br, 2 * br, 2 * br), str(d.index + 1),
+                       make_font(theme.FONT_GADGET, 19, True), theme.GOLD_SOFT, theme.GOLD,
+                       0.8 + 0.3 * breath, ALIGN_CENTER)
+
+        # tên khu (neon) + dòng phụ
+        tx = r.left() + 62
+        right_w = 66.0
+        avail = r.right() - right_w - tx - 4
+        p.setFont(make_font(theme.FONT_MONO, 10, True, spacing=1.6))
+        p.setPen(QColor(theme.CYAN_LASER))
+        p.drawText(QRectF(tx, r.top() + 5, avail, 14), ALIGN_LEFT_MID,
+                   f"KHU {d.index + 1}  ·  LƯỚI {d.n}×{d.n}")
+        title = DIFFICULTY_VN.get(d.n, "THÁM TỬ")
+        px = 19
+        while px > 10 and QFontMetricsF(make_font(theme.FONT_GADGET, px, True)).horizontalAdvance(title) > avail:
+            px -= 1
+        draw_neon_text(p, QRectF(tx, r.top() + 18, avail, 24), title,
+                       make_font(theme.FONT_GADGET, px, True), theme.GOLD_SOFT, theme.GOLD,
+                       0.7 + 0.3 * breath, ALIGN_LEFT_MID)
+
+        # số vụ đã phá
+        count_color = QColor(theme.GOLD_SOFT if complete else ACCENT_DONE if done else "#ff8a96")
+        draw_neon_text(p, QRectF(r.right() - right_w - 6, r.top() + 5, right_w, 26), f"{done}/{total}",
+                       make_font(theme.FONT_GADGET, 19, True), count_color.lighter(120), count_color,
+                       0.7, ALIGN_CENTER)
+        p.setFont(make_font(theme.FONT_MONO, 9, True, spacing=1.2))
+        p.setPen(QColor("#7fdcff"))
+        p.drawText(QRectF(r.right() - right_w - 6, r.top() + 30, right_w, 12), ALIGN_CENTER, "ĐÃ PHÁ")
+
+        # thanh tiến độ chia đoạn: mỗi đoạn một vụ án (xanh = đã phá, tối = chưa)
+        if total:
+            bx, bw, by = r.left() + 14, r.width() - 28, r.bottom() - 9
+            gap = 3.0
+            seg = (bw - gap * (total - 1)) / total
+            p.setPen(NO_PEN)
+            for i in range(total):
+                rect = QRectF(bx + i * (seg + gap), by, seg, 4)
+                if i < done:
+                    glow = QColor(complete and theme.GOLD_SOFT or ACCENT_DONE)
+                    glow.setAlpha(70)
+                    p.setBrush(glow)
+                    p.drawRoundedRect(rect.adjusted(-1.5, -2, 1.5, 2), 3, 3)
+                    p.setBrush(QColor(complete and theme.GOLD_SOFT or ACCENT_DONE))
+                else:
+                    p.setBrush(QColor(40, 62, 110, 150))
+                p.drawRoundedRect(rect, 2, 2)
+        p.restore()
 
     def _paint_legend(self, p: QPainter, w: float, h: float) -> None:
         plate = QRectF(w - 318, h - 132, 290, 112)
