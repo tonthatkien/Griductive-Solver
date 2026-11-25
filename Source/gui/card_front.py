@@ -1,6 +1,8 @@
 """Mixin vẽ mặt ngửa của thẻ: nền lab, chân dung, dấu CRIMINAL/INNOCENT, manh mối. (Scope F)
 """
 
+import math
+
 from PySide6.QtCore import (QPointF, QRectF, Qt)
 from PySide6.QtGui import (QBrush, QColor, QLinearGradient, QPainter,
                            QPainterPath, QPixmap, QRadialGradient)
@@ -71,21 +73,11 @@ class CardFrontMixin:
         return self._front_cache
 
     def _paint_front(self, p: QPainter, r: QRectF, u: float) -> None:
-        """Mặt ngửa: lớp tĩnh (cache) + vệt quét CRT chạy từ trên xuống + chữ manh mối đang gõ."""
+        """Mặt ngửa: lớp tĩnh (cache) + góc ngắm nhấp nháy + chữ manh mối đang gõ."""
         p.drawPixmap(QPointF(r.left() - 8, r.top() - 8), self._front_base(r, u))
-        clue_box = self._front_rects(r, u)[4]
-        path = QPainterPath()
-        path.addRoundedRect(r, 12, 12)
-        p.save()
-        p.setClipPath(path)
-        band = u * 0.2
-        y = r.top() - band + (r.height() + band) * ((clock().t * 0.22 + self._phase) % 1.0)
-        sweep = QLinearGradient(0, y, 0, y + band)
-        sweep.setColorAt(0, QColor(56, 242, 255, 0))
-        sweep.setColorAt(0.7, QColor(56, 242, 255, 34))
-        sweep.setColorAt(1, QColor(160, 250, 255, 80))
-        p.fillRect(QRectF(r.left(), y, r.width(), band), QBrush(sweep))
-        p.restore()
+        portrait, clue_box = self._front_rects(r, u)[2], self._front_rects(r, u)[4]
+        self._paint_reticle(p, portrait, u)
+        self._paint_card_blink(p, r, u)
         compact = self._compact(u)
         pad = u * (0.06 if compact else 0.07)
         count = int(self._type.now * len(self.clue_text) + 0.5)
@@ -96,6 +88,47 @@ class CardFrontMixin:
         draw_typed(p, text_rect, self.clue_text, count, theme.FONT_CLUE_BODY, int(u * 0.135),
                    8 if compact else 10, "#d6f3ff",
                    cursor=self._type_busy and 0 < count < len(self.clue_text))
+        p.restore()
+
+    def _paint_reticle(self, p: QPainter, portrait: QRectF, u: float) -> None:
+        """Góc ngắm quanh chân dung: 4 góc thở sáng/tối."""
+        accent = QColor(_ACCENTS.get(self.status or "", theme.CYAN_LASER))
+        t = clock().t + self._phase * 10
+        pulse = 0.5 + 0.5 * math.sin(t * 2.6)                 # 0..1, nhịp thở của góc ngắm
+        frame = portrait.adjusted(-3, -3, 3, 3)
+        size = u * 0.07
+        p.save()
+        glow = QColor(accent)
+        glow.setAlpha(int(30 + 70 * pulse))
+        draw_brackets(p, frame, glow, size * (1.0 + 0.25 * pulse), max(4.0, u * 0.03))      # quầng sáng
+        bright = QColor(accent.lighter(150))
+        bright.setAlpha(int(110 + 145 * pulse))
+        draw_brackets(p, frame, bright, size * (1.0 + 0.25 * pulse), 2.0)                   # nét chính
+        p.restore()
+
+    def _paint_card_blink(self, p: QPainter, r: QRectF, u: float) -> None:
+        """Nhấp nháy cả thẻ: nền phủ màu kết luận + viền neon cùng sáng/tối theo nhịp thở
+        (đỏ = CRIMINAL, xanh dương = INNOCENT). Mỗi thẻ lệch pha để không nháy đồng loạt."""
+        accent = QColor(_ACCENTS.get(self.status or "", theme.CYAN_LASER))
+        t = clock().t + self._phase * 10
+        wave = 0.5 + 0.5 * math.sin(t * 2.4)        # 0..1, ~2.6 s / nhịp
+        pulse = wave * wave                          # nhọn hơn: sáng gắt rồi dịu lâu
+        path = QPainterPath()
+        path.addRoundedRect(r, 12, 12)
+        p.save()
+        tint = QColor(accent)
+        tint.setAlpha(int(8 + 52 * pulse))
+        p.fillPath(path, tint)                       # nền thẻ nháy
+        p.setBrush(NO_BRUSH)
+        for width, alpha in ((12, 60), (7, 110)):    # quầng viền nở ra khi sáng
+            glow = QColor(accent)
+            glow.setAlpha(int(alpha * pulse))
+            p.setPen(pen(glow, width))
+            p.drawPath(path)
+        edge = QColor(accent.lighter(100 + int(60 * pulse)))
+        edge.setAlpha(int(150 + 105 * pulse))
+        p.setPen(pen(edge, 2.5))
+        p.drawPath(path)
         p.restore()
 
     def _paint_front_static(self, p: QPainter, r: QRectF, u: float) -> None:
