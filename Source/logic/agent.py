@@ -3,7 +3,7 @@
 E1 kiểm tra KB trước khi thử giả định đối lập; không coi một model SAT là bằng
 chứng về trạng thái. Timeout được truyền ra bằng TimeoutError, không thành UNSAT.
 E2 chọn ô forced theo row-major và cập nhật PublicKB sau từng verdict ACCEPTED.
-Các chức năng E3/E4/E5 vẫn giữ stub, triển khai ở task riêng.
+E3 ghi trace thật cho từng bước; E4/E5 triển khai ở task riêng.
 """
 from __future__ import annotations
 
@@ -48,11 +48,11 @@ class SatQuery:
 
 @dataclass
 class TraceEntry:
-    """Cấu trúc trace sẵn có, dành cho task E3."""
+    """Một bước ACCEPTED; SAT queries là các cặp (biểu thức, kết quả) cho GUI/report."""
 
     step: int
     active_clue_ids: List[str]
-    sat_queries: List[tuple] = field(default_factory=list)
+    sat_queries: List[tuple[str, str]] = field(default_factory=list)
     cell: str = ""
     verdict: str = ""
     newly_revealed_clue_id: str = ""
@@ -81,6 +81,7 @@ class LogicAgent:
         self.total_runtime = 0.0
         self.sat_queries: list[SatQuery] = []
         self.last_queries: list[SatQuery] = []
+        self.trace: List[TraceEntry] = []
         self.solve_status: str | None = None
         self._selection_status: str | None = None
 
@@ -166,41 +167,62 @@ class LogicAgent:
     def hint(self, public_kb):
         raise NotImplementedError
 
-    def auto_solve(self, engine: RevealEngine) -> List[TraceEntry]:
-        """Lặp chọn forced, nộp verdict và lấy lại PublicKB; trả các bước ACCEPTED.
+    def step(self, engine: RevealEngine) -> TraceEntry | None:
+        """Thực hiện một bước forced và lưu trace sau ACCEPTED, hoặc trả None.
 
-        solve_status là SOLVED/STUCK/INCONSISTENT khi kết thúc bình thường.
-        Timeout đặt trạng thái TIMEOUT rồi ném TimeoutError; không đoán hoặc retry.
-        TraceEntry ở E2 chỉ ghi step/cell/verdict và clue đang active; SAT query
-        chi tiết và newly_revealed_clue_id dành cho task E3.
+        Trace chứa mọi query trong lần chọn ô (kể cả ô UNKNOWN bị bỏ qua), theo
+        thứ tự thực thi. Query kiểm chứng lại của engine không lặp vào trace;
+        chúng vẫn có trong sat_queries tích lũy. Chỉ đọc clue mới sau ACCEPTED.
+        Timeout truyền ra và giữ lại các bước đã chấp nhận trong self.trace.
         """
         self.solve_status = None
-        entries: List[TraceEntry] = []
         try:
             public = engine.get_public_kb()
-            while True:
-                forced = self.next_forced(public)
-                if forced is None:
-                    self.solve_status = self._selection_status
-                    return entries
-                cell, verdict = forced
-                if engine.submit_verdict(cell, verdict, self.classify) != ACCEPTED:
-                    raise RuntimeError(f"Engine từ chối verdict đã chứng minh: {cell} {verdict}")
-                after = engine.get_public_kb()
-                if not isinstance(after, PublicKB) or not isinstance(after.proved, Mapping):
-                    raise RuntimeError("Engine không trả PublicKB hợp lệ sau ACCEPTED")
-                if after.n != public.n or after.proved.get(cell) != verdict:
-                    raise RuntimeError("Engine ACCEPTED nhưng chưa cập nhật PublicKB")
-                if any(after.proved.get(c) != v for c, v in public.proved.items()):
-                    raise RuntimeError("Engine làm mất hoặc đổi verdict đã chứng minh")
-                entries.append(TraceEntry(
-                    step=len(entries) + 1, active_clue_ids=[c.id for c in public.revealed_clues],
-                    cell=cell, verdict=verdict,
-                ))
-                public = after
+            query_start = len(self.sat_queries)
+            forced = self.next_forced(public)
+            if forced is None:
+                self.solve_status = self._selection_status
+                return None
+            cell, verdict = forced
+            queries = []
+            for query in self.sat_queries[query_start:]:
+                expression = "KB"
+                for literal in query.assumptions:
+                    name = board.cell_of_var(abs(literal), public.n)
+                    expression += f" ∧ {'¬' if literal < 0 else ''}C_{name}"
+                queries.append((expression, query.status))
+            active_ids = [clue.id for clue in public.revealed_clues]
+            if engine.submit_verdict(cell, verdict, self.classify) != ACCEPTED:
+                raise RuntimeError(f"Engine từ chối verdict đã chứng minh: {cell} {verdict}")
+            after = engine.get_public_kb()
+            if not isinstance(after, PublicKB) or not isinstance(after.proved, Mapping):
+                raise RuntimeError("Engine không trả PublicKB hợp lệ sau ACCEPTED")
+            if after.n != public.n or after.proved.get(cell) != verdict:
+                raise RuntimeError("Engine ACCEPTED nhưng chưa cập nhật PublicKB")
+            if any(after.proved.get(c) != v for c, v in public.proved.items()):
+                raise RuntimeError("Engine làm mất hoặc đổi verdict đã chứng minh")
+            new_ids = [clue.id for clue in after.revealed_clues if clue.id not in active_ids]
+            entry = TraceEntry(
+                step=len(self.trace) + 1, active_clue_ids=active_ids,
+                sat_queries=queries, cell=cell, verdict=verdict,
+                newly_revealed_clue_id=new_ids[0] if new_ids else "",
+            )
+            self.trace.append(entry)
+            return entry
         except TimeoutError:
             self.solve_status = TIMEOUT
             raise
+
+    def auto_solve(self, engine: RevealEngine) -> List[TraceEntry]:
+        """Giải bằng step đến SOLVED/STUCK/INCONSISTENT, trả trace của lần chạy này.
+
+        Mỗi lần gọi bắt đầu trace mới; bộ đếm SAT vẫn tích lũy. Khi timeout,
+        self.trace giữ các bước ACCEPTED trước lỗi để GUI/report lấy lại.
+        """
+        self.trace = []
+        while self.step(engine) is not None:
+            pass
+        return list(self.trace)
 
 
 def uniqueness_check(all_clues, n: int):
