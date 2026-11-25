@@ -24,16 +24,22 @@ NIGHT_BOTTOM = "#1b3157"
 
 FONT_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
 FONT_STACKS: Dict[str, List[str]] = {
+    "display": ["Orbitron", "Bahnschrift", "Segoe UI", "Arial", "sans-serif"],   # chữ game (ASCII)
+    "clue_title": ["Tektur", "Segoe UI", "Arial", "sans-serif"],
+    "clue_body": ["Be Vietnam Pro", "Segoe UI", "Arial", "sans-serif"],
     "title": ["Cinzel", "Trajan Pro", "Georgia", "Times New Roman", "serif"],
     "gadget": ["Orbitron", "Bahnschrift", "Segoe UI", "Arial", "sans-serif"],
     "dossier": ["Courier Prime", "Courier New", "Cousine", "Courier", "monospace"],
     "mono": ["Share Tech Mono", "Consolas", "Menlo", "DejaVu Sans Mono", "Courier New", "monospace"],
 }
 # Giá trị mặc định; init_fonts() cập nhật theo font thực sự có trên máy.
+FONT_DISPLAY = FONT_STACKS["display"][0]
 FONT_TITLE = FONT_STACKS["title"][0]
 FONT_GADGET = FONT_STACKS["gadget"][0]
 FONT_DOSSIER = FONT_STACKS["dossier"][0]
 FONT_MONO = FONT_STACKS["mono"][0]
+FONT_CLUE_TITLE = FONT_STACKS["clue_title"][0]
+FONT_CLUE_BODY = FONT_STACKS["clue_body"][0]
 
 
 def init_fonts() -> Dict[str, str]:
@@ -41,7 +47,7 @@ def init_fonts() -> Dict[str, str]:
 
     Phải gọi SAU khi tạo QApplication và TRƯỚC build_qss(). Trả về {lớp: tên font}.
     """
-    global FONT_TITLE, FONT_GADGET, FONT_DOSSIER, FONT_MONO
+    global FONT_DISPLAY, FONT_TITLE, FONT_GADGET, FONT_DOSSIER, FONT_MONO, FONT_CLUE_TITLE, FONT_CLUE_BODY
     from PySide6.QtGui import QFontDatabase
     if FONT_DIR.is_dir():
         for path in sorted(FONT_DIR.iterdir()):
@@ -50,9 +56,16 @@ def init_fonts() -> Dict[str, str]:
     installed = {name.lower(): name for name in QFontDatabase.families()}
     resolved = {layer: next((installed[n.lower()] for n in stack if n.lower() in installed), stack[-1])
                 for layer, stack in FONT_STACKS.items()}
+    FONT_DISPLAY = resolved["display"]
     FONT_TITLE, FONT_GADGET = resolved["title"], resolved["gadget"]
     FONT_DOSSIER, FONT_MONO = resolved["dossier"], resolved["mono"]
+    FONT_CLUE_TITLE, FONT_CLUE_BODY = resolved["clue_title"], resolved["clue_body"]
     return resolved
+
+
+def display(text: str) -> str:
+    """Font game (Orbitron) nếu chuỗi chỉ gồm ASCII; có dấu tiếng Việt thì dùng font title."""
+    return FONT_DISPLAY if text.isascii() else FONT_TITLE
 
 
 def supports_vietnamese(family: str) -> bool:

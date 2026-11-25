@@ -43,20 +43,20 @@ class CardBackMixin:
         p.setBrush(QColor(255, 255, 255, 22))
         p.drawRect(strip)
         p.setPen(QColor(theme.CYAN_LASER))
-        p.setFont(make_font(theme.FONT_GADGET, u * 0.068, True, spacing=1.5))
+        p.setFont(make_font(theme.FONT_GADGET, u * 0.085, True, spacing=1.5))
         p.drawText(strip.adjusted(u * 0.07, 0, 0, 0), ALIGN_LEFT_MID, "HỒ SƠ MẬT")
         p.setPen(QColor(theme.GOLD))
-        p.setFont(make_font(theme.FONT_MONO, u * 0.1, True))
+        p.setFont(make_font(theme.FONT_MONO, u * 0.125, True))
         p.drawText(strip.adjusted(0, 0, -u * 0.07, 0), flags(A.AlignRight, A.AlignVCenter), self.cell)
         plate = QRectF(r.left(), r.bottom() - u * 0.32, r.width(), u * 0.32)
         p.setPen(NO_PEN)
         p.setBrush(QColor(0, 0, 0, 150))
         p.drawRect(plate)
         draw_fitted(p, QRectF(plate.left() + u * 0.05, plate.top() + u * 0.02, plate.width() - u * 0.1,
-                              u * 0.18), self.name, theme.FONT_TITLE, int(u * 0.13), 9, theme.GOLD_SOFT,
+                              u * 0.18), self.name, theme.FONT_TITLE, int(u * 0.16), 10, theme.GOLD_SOFT,
                     bold=True, fl=ALIGN_CENTER)
         draw_fitted(p, QRectF(plate.left() + u * 0.05, plate.top() + u * 0.2, plate.width() - u * 0.1,
-                              u * 0.11), self.profession, theme.FONT_DOSSIER, int(u * 0.088), 8, "#b9c6e6",
+                              u * 0.11), self.profession, theme.FONT_DOSSIER, int(u * 0.11), 9, "#b9c6e6",
                     italic=True, fl=ALIGN_CENTER)
         p.restore()
         self._wax_seal(p, QPointF(cx, r.top() + r.height() * 0.66), u * 0.075, seal_progress)

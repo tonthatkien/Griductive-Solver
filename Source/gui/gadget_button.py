@@ -24,9 +24,10 @@ class GadgetButton(QAbstractButton):
               "auto": icons.draw_ball, "pause": icons.draw_pause}
 
     def __init__(self, kind: str, caption: str, subtitle: str, tooltip: str,
-                 parent: Optional[QWidget] = None) -> None:
+                 parent: Optional[QWidget] = None, compact: bool = False) -> None:
         super().__init__(parent)
         self.kind, self.caption, self.subtitle = kind, caption, subtitle
+        self.compact = compact                       # True: nút ngang gọn (icon + tên), dùng ở thanh tiêu đề
         self._working, self._last_second = False, -1
         self._glow = Tween(self, self.update, QEasingCurve.Type.OutCubic)
         self.setToolTip(tooltip)
@@ -35,7 +36,7 @@ class GadgetButton(QAbstractButton):
         clock().tick.connect(self._on_tick)
 
     def sizeHint(self) -> QSize:
-        return QSize(128, 112)
+        return QSize(124, 44) if self.compact else QSize(128, 112)
 
     def set_look(self, kind: str, caption: str, subtitle: str) -> None:
         self.kind, self.caption, self.subtitle = kind, caption, subtitle
@@ -121,6 +122,14 @@ class GadgetButton(QAbstractButton):
         p.drawRoundedRect(r, 14, 14)
         if self._working:
             self._paint_energy_ring(p, r)
+        if self.compact:
+            icon = QRectF(r.left() + 6, r.top() + 3 - 2 * g, r.height() - 6, r.height() - 6)
+            self._paint_icon(p, icon, g)
+            p.setPen(QColor(theme.CYAN_LASER if g > 0.5 else theme.GOLD_SOFT))
+            p.setFont(make_font(theme.FONT_GADGET, 11, True, spacing=0.5))
+            p.drawText(QRectF(icon.right() + 2, r.top(), r.right() - icon.right() - 6, r.height()),
+                       ALIGN_CENTER, self.caption)
+            return
         icon_size = r.height() * 0.5
         icon = QRectF(r.center().x() - icon_size / 2, r.top() + 8 - 3 * g, icon_size, icon_size)
         self._paint_icon(p, icon, g)

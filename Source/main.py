@@ -1,7 +1,7 @@
 """Entry point: chạy GUI.
 
-  python main.py                                   # mở GUI, hỏi chọn file puzzle
-  python main.py --puzzle data/puzzles_3x3/p01.json
+  python main.py                                   # mở bản đồ vụ án, bấm địa điểm để chọn màn
+  python main.py --puzzle data/puzzles_3x3/p01.json   # vào thẳng màn chơi, bỏ qua bản đồ
 """
 import argparse
 import sys

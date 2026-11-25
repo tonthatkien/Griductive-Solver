@@ -1,11 +1,13 @@
 """AutoMixin: Auto Solve / Bước tiếp / Dừng và màn hình hoàn thành. (Scope F)
 
 Mixin của MainWindow: dùng self.engine, self.agent, self.notebook, ... do MainWindow khai báo.
+Nhờ Agent suy luận (Auto Solve hoặc Bước tiếp) thì ván chỉ được 1 sao (_auto_used).
 """
 
 from PySide6.QtCore import QTimer
 
 from gui.clue_text import STATUS_VN, format_clue_text
+from gui.progress import stars_text
 from gui.solver_driver import STEPPED, STUCK, SOLVED, run_step
 
 AUTO_DELAY_MS = 1100
@@ -42,6 +44,7 @@ class AutoMixin:
         self._update_controls()
 
     def _step(self) -> None:
+        self._auto_used = True
         step_no = self._step_no + 1
         self._run(lambda: run_step(self.engine, self.agent, step_no), self._on_step_done)
 
@@ -95,8 +98,10 @@ class AutoMixin:
 
     def _finish_solved(self) -> None:
         self._stop_auto()
+        stars = self._record_clear()
         self._refresh()
         QTimer.singleShot(1500, lambda: (self.effect.play("victory"),
                                          self.sound.play("victory")))   # chờ thẻ cuối lật xong
-        self.conan.say("Vụ án đã được phá! Sự thật chỉ có một!", "happy")
-        self._say("Hoàn thành: mọi nhân vật đã được xác định bằng suy luận, không đoán mò.", "ok")
+        self.conan.say(f"Vụ án đã được phá! {stars_text(stars)} Sự thật chỉ có một!", "happy")
+        self._say(f"Hoàn thành {stars_text(stars)}: mọi nhân vật đã được xác định bằng suy luận, "
+                  f"không đoán mò. Bấm Menu để về bản đồ.", "ok")
