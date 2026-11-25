@@ -31,6 +31,13 @@ class GridView(QWidget):
                 widget.setParent(None)
                 widget.deleteLater()
         self.cards = {}
+        # QGridLayout nhớ stretch/min-size của hàng/cột cũ: reset hết, nếu không
+        # hàng/cột thừa của lưới 5x5 vẫn chiếm chỗ khi quay lại 3x3.
+        for i in range(max(self._layout.rowCount(), self._layout.columnCount())):
+            self._layout.setRowStretch(i, 0)
+            self._layout.setColumnStretch(i, 0)
+            self._layout.setRowMinimumHeight(i, 0)
+            self._layout.setColumnMinimumWidth(i, 0)
         self._layout.setSpacing(12 if n <= 3 else 5)   # lưới lớn: thu khoảng cách để thẻ rộng hơn
         for c in range(n):
             self._layout.addWidget(self._coord(board.COLS[c], height=24), 0, c + 1)
