@@ -48,6 +48,7 @@ from logic.agent import (  # noqa: E402
     UNSAT,
     uniqueness_check,
 )
+from logic.cnf_encoder import Encoder  # noqa: E402
 
 DEFAULT_DATA_DIR = SOURCE_DIR / "data"
 DEFAULT_OUT_PATH = SOURCE_DIR / "experiments" / "results.csv"
@@ -174,6 +175,20 @@ def run_one(
         print(f"ERROR {puzzle_name}: {type(exc).__name__}{detail}", file=sys.stderr)
     runtime_sec = round(time.perf_counter() - start, 6)
 
+    primary_vars: int | str = ""
+    aux_vars: int | str = ""
+    clauses: int | str = ""
+    if engine is not None:
+        try:
+            public_kb = engine.get_public_kb()
+            kb = Encoder(public_kb.n).build_kb(public_kb)
+            primary_vars = kb.num_primary
+            aux_vars = kb.num_aux
+            clauses = kb.num_clauses
+        except Exception as exc:
+            detail = f": {exc}" if str(exc) else ""
+            print(f"ERROR {puzzle_name} (kb): {type(exc).__name__}{detail}", file=sys.stderr)
+
     unique = _check_uniqueness(puzzle_path, timeout) if check_unique else ""
     trace_sat_calls = sum(len(entry.sat_queries) for entry in agent.trace)
     return {
@@ -181,6 +196,9 @@ def run_one(
         "size": size,
         "status": status,
         "unique": unique,
+        "primary_vars": primary_vars,
+        "aux_vars": aux_vars,
+        "clauses": clauses,
         "sat_calls": agent.sat_calls,
         "trace_sat_calls": trace_sat_calls,
         "untraced_sat_calls": agent.sat_calls - trace_sat_calls,
