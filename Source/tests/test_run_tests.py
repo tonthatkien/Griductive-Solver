@@ -113,7 +113,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(row["primary_vars"], "9")
         self.assertEqual(row["aux_vars"], "0")
         self.assertEqual(row["clauses"], "18")
-        self.assertEqual(row["reveal_waves"], "")
+        self.assertEqual(row["reveal_waves"], "8")
 
     def test_timeout_zero_writes_timeout_rows_for_all_puzzles(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -137,6 +137,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
             self.assertEqual(row["aux_vars"], "0")
             self.assertEqual(row["clauses"], "2")
             self.assertEqual(row["deduction_steps"], "0")
+            self.assertEqual(row["reveal_waves"], "TIMEOUT")
             self.assertEqual(row["sat_calls"], "1")
             self.assertEqual(row["trace_sat_calls"], "0")
             self.assertEqual(row["untraced_sat_calls"], "1")
@@ -168,6 +169,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(row["aux_vars"], 0)
         self.assertEqual(row["clauses"], 4)
         self.assertEqual(row["deduction_steps"], 1)
+        self.assertEqual(row["reveal_waves"], "")
         self.assertGreater(row["sat_calls"], 1)
 
     def test_ambiguous_puzzle_writes_stuck_row(self) -> None:
@@ -186,6 +188,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(rows[0]["aux_vars"], "0")
         self.assertEqual(rows[0]["clauses"], "2")
         self.assertEqual(rows[0]["deduction_steps"], "0")
+        self.assertEqual(rows[0]["reveal_waves"], "0")
         self.assertGreater(int(rows[0]["sat_calls"]), 0)
         self.assertEqual(rows[0]["trace_sat_calls"], "0")
         self.assertEqual(rows[0]["untraced_sat_calls"], rows[0]["sat_calls"])
@@ -210,12 +213,14 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(rows[0]["primary_vars"], "")
         self.assertEqual(rows[0]["aux_vars"], "")
         self.assertEqual(rows[0]["clauses"], "")
+        self.assertEqual(rows[0]["reveal_waves"], "")
         self.assertEqual(rows[0]["sat_calls"], "0")
         self.assertEqual(rows[1]["puzzle"], "puzzles_3x3/b_valid.json")
         self.assertEqual(rows[1]["status"], "SOLVED")
         self.assertEqual(rows[1]["primary_vars"], "9")
         self.assertEqual(rows[1]["aux_vars"], "0")
         self.assertEqual(rows[1]["clauses"], "18")
+        self.assertEqual(rows[1]["reveal_waves"], "8")
 
     def test_inconsistent_snapshot_engine_writes_inconsistent_row(self) -> None:
         public = PublicKB(3, (fact("A1", INNOCENT),), {"A1": CRIMINAL})
@@ -231,6 +236,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(row["clauses"], 2)
         self.assertEqual(row["sat_calls"], 1)
         self.assertEqual(row["deduction_steps"], 0)
+        self.assertEqual(row["reveal_waves"], "")
 
     def test_engine_rejection_and_assertion_write_error_rows(self) -> None:
         public = PublicKB(3, (fact("A1", CRIMINAL),))
@@ -245,6 +251,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(rejected["primary_vars"], 9)
         self.assertEqual(rejected["aux_vars"], 0)
         self.assertEqual(rejected["clauses"], 1)
+        self.assertEqual(rejected["reveal_waves"], "")
         self.assertIn("ERROR puzzles_3x3/rejected.json: RuntimeError", stderr.getvalue())
 
         bad_data = chain_puzzle()
@@ -263,6 +270,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(rows[0]["primary_vars"], "9")
         self.assertEqual(rows[0]["aux_vars"], "0")
         self.assertEqual(rows[0]["clauses"], "2")
+        self.assertEqual(rows[0]["reveal_waves"], "ERROR")
 
     def test_unexpected_exception_writes_error_row_and_continues(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -376,6 +384,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(row["trace_sat_calls"], 30)
         self.assertEqual(row["untraced_sat_calls"], 19)
         self.assertEqual(row["sat_calls"], row["trace_sat_calls"] + row["untraced_sat_calls"])
+        self.assertEqual(row["reveal_waves"], 3)
 
     def test_real_p01_initial_and_final_kb_counts(self) -> None:
         puzzle_path = DATA_DIR / "puzzles_3x3/p01.json"
@@ -387,17 +396,19 @@ class RunTestsStatusRowsTests(unittest.TestCase):
             (solved["primary_vars"], solved["aux_vars"], solved["clauses"]),
             (9, 0, 37),
         )
+        self.assertEqual(solved["reveal_waves"], 3)
         self.assertEqual(timed_out["status"], "TIMEOUT")
         self.assertEqual(
             (timed_out["primary_vars"], timed_out["aux_vars"], timed_out["clauses"]),
             (9, 0, 7),
         )
+        self.assertEqual(timed_out["reveal_waves"], "TIMEOUT")
 
     def test_solved_puzzles_match_full_clue_kb_clauses_and_aux_vars(self) -> None:
-        for folder in ("puzzles_3x3", "puzzles_4x4"):
+        for folder in ("puzzles_3x3", "puzzles_4x4", "puzzles_5x5"):
             for puzzle_path in sorted((DATA_DIR / folder).glob("*.json")):
                 with self.subTest(puzzle=f"{folder}/{puzzle_path.name}"):
-                    row = run_one(puzzle_path, timeout=10)
+                    row = run_one(puzzle_path, timeout=30)
                     clues, n = _puzzle_clues(puzzle_path)
                     full_kb = Encoder(n).build_kb(PublicKB(n, tuple(clues)))
                     self.assertEqual(row["status"], "SOLVED")
@@ -407,6 +418,8 @@ class RunTestsStatusRowsTests(unittest.TestCase):
                         row["clauses"],
                         full_kb.num_clauses + int(row["deduction_steps"]),
                     )
+                    self.assertGreaterEqual(int(row["reveal_waves"]), 1)
+                    self.assertLessEqual(int(row["reveal_waves"]), int(row["deduction_steps"]))
 
     def test_kb_count_error_leaves_columns_blank_without_changing_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -419,6 +432,49 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(row["status"], "SOLVED")
         self.assertEqual((row["primary_vars"], row["aux_vars"], row["clauses"]), ("", "", ""))
         self.assertIn("ERROR puzzles_3x3/p01.json (kb): ValueError: bad kb", stderr.getvalue())
+
+    def test_reveal_waves_partial_stuck_inconsistent_and_pass_errors(self) -> None:
+        partial_stuck = chain_puzzle()
+        partial_stuck["characters"][1]["clue"] = {
+            "type": "FACT", "target": "A1", "status": CRIMINAL,
+        }
+        unsat_data = chain_puzzle()
+        unsat_data["characters"][0]["clue"] = {
+            "type": "FACT", "target": "A1", "status": INNOCENT,
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            partial_path = _write_json(root / "puzzles_3x3/partial.json", partial_stuck)
+            unsat_path = _write_json(root / "puzzles_3x3/unsat.json", unsat_data)
+            solved_path = _write_json(root / "puzzles_3x3/solved.json", chain_puzzle())
+
+            partial_row = run_one(partial_path, timeout=10)
+            unsat_row = run_one(unsat_path, timeout=10)
+
+            self.assertEqual(partial_row["status"], "STUCK")
+            self.assertEqual(partial_row["reveal_waves"], 1)
+            self.assertEqual(unsat_row["status"], "INCONSISTENT")
+            self.assertEqual(unsat_row["reveal_waves"], 0)
+
+            for exc, expected, err_text in (
+                (TimeoutError("wave timeout"), "TIMEOUT", ""),
+                (RuntimeError("wave crash"), "ERROR", "ERROR puzzles_3x3/solved.json (waves): "),
+            ):
+                with self.subTest(exc=type(exc).__name__):
+                    solve_agent = LogicAgent(timeout=10)
+                    wave_agent = LogicAgent(timeout=10)
+                    stderr = io.StringIO()
+                    with patch.object(wave_agent, "classify", side_effect=exc):
+                        with patch(
+                            "experiments.run_tests.LogicAgent",
+                            side_effect=[solve_agent, wave_agent],
+                        ):
+                            with redirect_stderr(stderr):
+                                row = run_one(solved_path, timeout=10)
+                    self.assertEqual(row["status"], "SOLVED")
+                    self.assertEqual(row["reveal_waves"], expected)
+                    self.assertEqual(row["sat_calls"], solve_agent.sat_calls)
+                    self.assertIn(err_text, stderr.getvalue())
 
 
 if __name__ == "__main__":

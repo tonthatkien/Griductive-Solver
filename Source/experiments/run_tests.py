@@ -23,7 +23,10 @@ Cách đếm các cột kết quả:
 - `primary_vars`, `aux_vars`, `clauses`: đếm bằng `Encoder.build_kb` trên
   `PublicKB` lúc dừng (lượt quét cuối, hoặc lúc timeout/lỗi); để trống nếu
   chưa có engine hoặc `build_kb` lỗi.
-- Cột `reveal_waves` để trống.
+- `reveal_waves`: số lượt gom và nộp toàn bộ ô bị ép từ `PublicKB` hiện tại
+  trong một lượt chạy riêng bằng `LogicAgent.classify`; không cộng vào
+  `sat_calls`, các bộ đếm DPLL hay `runtime_sec`, và để trống khi truyền sẵn
+  `engine` hoặc chưa nạp được file.
 """
 from __future__ import annotations
 
@@ -40,9 +43,16 @@ SOURCE_DIR = Path(__file__).resolve().parent.parent
 if str(SOURCE_DIR) not in sys.path:
     sys.path.insert(0, str(SOURCE_DIR))
 
+from engine import board  # noqa: E402
 from engine.character import parse_character  # noqa: E402
 from engine.clue import Clue  # noqa: E402
-from engine.constants import CRIMINAL, INNOCENT  # noqa: E402
+from engine.constants import (  # noqa: E402
+    ACCEPTED,
+    CRIMINAL,
+    INCONSISTENT,
+    INNOCENT,
+    UNKNOWN,
+)
 from engine.game_state import GameEngine  # noqa: E402
 from logic.agent import (  # noqa: E402
     LogicAgent,
@@ -124,6 +134,12 @@ def _puzzle_clues(path: Path) -> tuple[list[Clue], int]:
     return clues, n
 
 
+def _log_error(puzzle_name: str, exc: Exception, stage: str = "") -> None:
+    detail = f": {exc}" if str(exc) else ""
+    suffix = f" ({stage})" if stage else ""
+    print(f"ERROR {puzzle_name}{suffix}: {type(exc).__name__}{detail}", file=sys.stderr)
+
+
 def _check_uniqueness(path: Path, timeout: float | None) -> str:
     try:
         clues, n = _puzzle_clues(path)
@@ -131,13 +147,52 @@ def _check_uniqueness(path: Path, timeout: float | None) -> str:
     except TimeoutError:
         return TIMEOUT
     except Exception as exc:
-        detail = f": {exc}" if str(exc) else ""
-        puzzle_name = f"{path.parent.name}/{path.name}"
-        print(f"ERROR {puzzle_name} (unique): {type(exc).__name__}{detail}", file=sys.stderr)
+        _log_error(f"{path.parent.name}/{path.name}", exc, "unique")
         return ERROR
     if is_unique:
         return UNIQUE
     return UNSAT if count == 0 else MULTIPLE
+
+
+def _count_reveal_waves(path: Path, timeout: float | None) -> int | str:
+    """Đếm số wave lật thẻ qua một lượt chạy riêng bằng `LogicAgent.classify`.
+
+    Mỗi wave gom mọi ô chưa chứng minh đã bị KB hiện tại ép trạng thái, rồi nộp
+    hết qua `submit_verdict` để mở clue cho wave sau. Hàm tự tạo `GameEngine` và
+    `LogicAgent` riêng nên không cộng vào bộ đếm của `run_one`; trả `TIMEOUT` khi
+    quá giờ hoặc `ERROR` khi gặp lỗi.
+    """
+    try:
+        engine = GameEngine()
+        engine.load_puzzle(path)
+        agent = LogicAgent(timeout=timeout)
+        waves = 0
+        while True:
+            public_kb = engine.get_public_kb()
+            forced: list[tuple[str, str]] = []
+            for cell in board.all_cells(public_kb.n):
+                if cell in public_kb.proved:
+                    continue
+                verdict = agent.classify(public_kb, cell)
+                if verdict == INCONSISTENT:
+                    return waves
+                if verdict in (CRIMINAL, INNOCENT):
+                    forced.append((cell, verdict))
+                elif verdict != UNKNOWN:
+                    raise RuntimeError(f"classify trả trạng thái không hợp lệ: {verdict!r}")
+            if not forced:
+                return waves
+            for cell, verdict in forced:
+                if engine.submit_verdict(cell, verdict, agent.classify) != ACCEPTED:
+                    raise RuntimeError(
+                        f"Engine từ chối verdict đã chứng minh: {cell} {verdict}"
+                    )
+            waves += 1
+    except TimeoutError:
+        return TIMEOUT
+    except Exception as exc:
+        _log_error(f"{path.parent.name}/{path.name}", exc, "waves")
+        return ERROR
 
 
 def run_one(
@@ -174,8 +229,7 @@ def run_one(
     except TimeoutError:
         status = agent.solve_status or TIMEOUT
     except Exception as exc:
-        detail = f": {exc}" if str(exc) else ""
-        print(f"ERROR {puzzle_name}: {type(exc).__name__}{detail}", file=sys.stderr)
+        _log_error(puzzle_name, exc)
     runtime_sec = round(time.perf_counter() - start, 6)
 
     primary_vars: int | str = ""
@@ -189,10 +243,10 @@ def run_one(
             aux_vars = kb.num_aux
             clauses = kb.num_clauses
         except Exception as exc:
-            detail = f": {exc}" if str(exc) else ""
-            print(f"ERROR {puzzle_name} (kb): {type(exc).__name__}{detail}", file=sys.stderr)
+            _log_error(puzzle_name, exc, "kb")
 
     unique = _check_uniqueness(puzzle_path, timeout) if check_unique else ""
+    reveal_waves = _count_reveal_waves(puzzle_path, timeout) if check_unique else ""
     trace_sat_calls = sum(len(entry.sat_queries) for entry in agent.trace)
     return {
         "puzzle": puzzle_name,
@@ -209,6 +263,7 @@ def run_one(
         "propagations": agent.total_propagations,
         "backtracks": agent.total_backtracks,
         "deduction_steps": len(agent.trace),
+        "reveal_waves": reveal_waves,
         "runtime_sec": runtime_sec,
     }
 
