@@ -45,6 +45,11 @@ class CardView(CardBackMixin, CardFrontMixin, CardHighlightMixin, QWidget):
         self._phase = (sum(map(ord, cell)) * 37 % 100) / 100.0    # lệch pha animation giữa các thẻ
         self._sparks: List[Tuple[float, float, float]] = []
         self._spark = Tween(self, self.update, QEasingCurve.Type.OutCubic)
+        self._appear = Tween(self, self.update, QEasingCurve.Type.OutCubic)   # lật vào lúc mở màn (1 = đã hiện)
+        self._appear.now = 1.0
+        self._appear_timer = QTimer(self)
+        self._appear_timer.setSingleShot(True)
+        self._appear_timer.timeout.connect(self._start_appear)
         self._front_cache: Optional[QPixmap] = None
         self._front_key: tuple = ()
         clock().tick.connect(self._on_tick)
@@ -83,6 +88,15 @@ class CardView(CardBackMixin, CardFrontMixin, CardHighlightMixin, QWidget):
                 self._flip.jump(1.0)
             if not self._type_busy:
                 self._type.jump(1.0)
+
+    def appear(self, delay_ms: int = 0) -> None:
+        """Thẻ ẩn đi rồi lật vào (mở ngang + hiện dần + nhô lên) sau `delay_ms`."""
+        self._appear_timer.stop()
+        self._appear.jump(0.0)
+        self._appear_timer.start(max(0, int(delay_ms)))
+
+    def _start_appear(self) -> None:
+        self._appear.go(1.0, 520)
 
     def _on_tick(self) -> None:
         if self.isVisible():
@@ -163,6 +177,15 @@ class CardView(CardBackMixin, CardFrontMixin, CardHighlightMixin, QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        k = self._appear.now
+        if k <= 0.0:                      # chưa tới lượt lật vào
+            return
+        if k < 1.0:
+            p.setOpacity(k)
+            c = QPointF(self.width() / 2, self.height() / 2 + (1.0 - k) * 22)
+            p.translate(c)
+            p.scale(max(0.04, k ** 0.6), 0.9 + 0.1 * k)
+            p.translate(-self.width() / 2, -self.height() / 2)
         margin = 7.0
         base = QRectF(margin, margin, self.width() - 2 * margin, self.height() - 2 * margin)
         unit = min(base.width(), base.height() * 0.78)

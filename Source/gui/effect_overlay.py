@@ -91,7 +91,7 @@ class EffectOverlay(QWidget):
 
     def _paint_victory(self, p: QPainter, t: float) -> None:
         w, h = float(self.width()), float(self.height())
-        p.fillRect(self.rect(), QColor(4, 10, 28, int(220 * min(1.0, t * 3))))
+        p.fillRect(self.rect(), QColor(4, 10, 28, int(150 * min(1.0, t * 3))))
         spot = QRadialGradient(QPointF(w / 2, h * 0.45), h * 0.6)
         spot.setColorAt(0, QColor(255, 230, 150, 80))
         spot.setColorAt(1, QColor(255, 230, 150, 0))

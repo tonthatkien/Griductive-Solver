@@ -60,6 +60,7 @@ class AutoMixin:
         elif result.status == STUCK:
             self._stop_auto()
             self.sound.play("not_provable")
+            self.backdrop.react_bad()
             self.notebook.add_note("STUCK: không còn ô nào bị ép buộc. Agent dừng, không đoán.", "#7a5a1a")
             self.conan.say("Manh mối hiện có chưa đủ để kết luận thêm ai. Không đoán mò!", "shake")
             self._say("STUCK: không còn ô nào bị ép buộc bởi tri thức hiện tại.", "warn")
@@ -73,6 +74,7 @@ class AutoMixin:
 
     def _on_stepped(self, result) -> None:
         self.sound.play("step")
+        self.backdrop.react_good()
         entry = result.entry
         self._step_no = entry.step
         self._refresh(animate={entry.cell})
@@ -100,8 +102,9 @@ class AutoMixin:
         self._stop_auto()
         stars = self._record_clear()
         self._refresh()
-        QTimer.singleShot(1500, lambda: (self.effect.play("victory"),
-                                         self.sound.play("victory")))   # chờ thẻ cuối lật xong
+        self.backdrop.play_dawn(2800)                    # đêm chuyển dần sang bình minh
+        QTimer.singleShot(3200, lambda: (self.effect.play("victory"),
+                                         self.sound.play("victory")))   # chờ bình minh lên xong
         self.conan.say(f"Vụ án đã được phá! {stars_text(stars)} Sự thật chỉ có một!", "happy")
         self._say(f"Hoàn thành {stars_text(stars)}: mọi nhân vật đã được xác định bằng suy luận, "
                   f"không đoán mò. Bấm Menu để về bản đồ.", "ok")

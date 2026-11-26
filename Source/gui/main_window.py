@@ -6,7 +6,8 @@ chọn trên bản đồ (gui/levels.py quét data/), hoặc truyền thẳng `p
 
 GUI KHÔNG chứa luật chơi hay suy luận: mọi verdict đi qua engine.submit_verdict(..., agent.classify),
 Hint qua agent.hint(public_kb), Auto Solve qua gui.solver_driver.run_step. Việc nặng chạy ở QThread.
-Phần chơi tay ở app_play.py, phần Auto Solve ở app_auto.py.
+Dựng giao diện ở app_build.py, cảnh mở đầu + ẩn/hiện giao diện ở app_view.py,
+phần chơi tay ở app_play.py, phần Auto Solve ở app_auto.py.
 
 Engine thật (engine/game_state.py): `engine.characters` là tuple[Character] công khai,
 `engine.n`, `engine.get_public_kb()`, `engine.load_puzzle(path)`, `engine.restart()`.
@@ -15,41 +16,27 @@ from pathlib import Path
 from typing import Callable, Dict, Optional
 
 import traceback
-from PySide6.QtCore import QPointF, Qt, QTimer, Signal
-from PySide6.QtWidgets import (QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
-                               QStackedWidget, QTabWidget, QVBoxLayout, QWidget)
+from PySide6.QtCore import QPointF, Qt, QTimer
+from PySide6.QtWidgets import QMainWindow, QMessageBox
 
 from engine.game_state import PublicKB
 from gui.clue_text import format_clue_text
-from gui.components import (ClueListView, ConanToast, ConanWidget, EffectOverlay, GadgetButton,
-                            GridView, NeonTitle, NightBackdrop, NotebookPanel, RadialMenu,
-                            TerminalMessage)
-from gui.iris import IrisTransition
-from gui.level_menu import LevelMenu
 from gui.levels import discover_levels
 from gui.progress import DEFAULT_PATH, Progress, compute_stars
 from gui.solver_driver import agent_counters
 from gui.sound import SoundManager
 from gui.task import Task
 from gui.app_auto import AutoMixin
+from gui.app_build import BuildMixin
 from gui.app_play import PlayMixin
+from gui.app_view import ViewMixin
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 TITLE_MENU = "Griductive · Bản đồ vụ án"
 TITLE_GAME = "Griductive · Conan Case File"
 
 
-class _Stage(QStackedWidget):
-    """QStackedWidget báo khi đổi kích thước để lớp chuyển cảnh phủ kín theo."""
-
-    resized = Signal()
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        self.resized.emit()
-
-
-class MainWindow(PlayMixin, AutoMixin, QMainWindow):
+class MainWindow(BuildMixin, ViewMixin, PlayMixin, AutoMixin, QMainWindow):
     def __init__(self, engine, agent, puzzle_path: Optional[str] = None) -> None:
         super().__init__()
         self.engine, self.agent = engine, agent
@@ -67,6 +54,7 @@ class MainWindow(PlayMixin, AutoMixin, QMainWindow):
         self._level_key: Optional[str] = None
         self._hints_used = self._wrong_attempts = 0     # để tính sao (progress.compute_stars)
         self._auto_used = self._recorded = False
+        self._intro_active = self._hud_hidden = False     # cảnh mở đầu đang chạy / giao diện đang ẩn để ngắm nền
         self.setWindowTitle(TITLE_MENU)
         self.resize(1440, 900)
         self.setMinimumSize(1100, 700)
@@ -85,108 +73,6 @@ class MainWindow(PlayMixin, AutoMixin, QMainWindow):
         else:
             self.stage.setCurrentWidget(self.menu)
             self.menu.setFocus()
-
-    # ---- dựng giao diện -------------------------------------------------------------
-    def _build_ui(self) -> None:
-        self.stage = _Stage()
-        self.setCentralWidget(self.stage)
-        self.menu = LevelMenu()
-        self.backdrop = NightBackdrop()
-        self.stage.addWidget(self.menu)
-        self.stage.addWidget(self.backdrop)
-        self.iris = IrisTransition(self.stage)
-        root = QVBoxLayout(self.backdrop)
-        root.setContentsMargins(12, 8, 12, 10)
-        root.setSpacing(6)
-
-        header = QHBoxLayout()
-        title = NeonTitle("GRIDUCTIVE · CONAN CASE FILE", px=18, spacing=3.0)
-        self.case_label = QLabel("")
-        self.case_label.setObjectName("subtitle")
-        self.progress_label = QLabel("")
-        self.progress_label.setObjectName("subtitle")
-        header.addWidget(title)
-        header.addSpacing(12)
-        header.addWidget(self.case_label)
-        header.addStretch(1)
-        # nút thao tác gọn nằm ngay trên thanh tiêu đề (tiết kiệm cả dải nút phía dưới)
-        self.btn_menu = GadgetButton("load", "Menu", "Bản đồ vụ án", "Quay về bản đồ chọn màn", compact=True)
-        self.btn_restart = GadgetButton("restart", "Restart", "Giày tăng lực", "Đặt lại ván về trạng thái ban đầu", compact=True)
-        self.btn_hint = GadgetButton("hint", "Hint", "Đồng hồ gây mê", "Chỉ ra ô có thể chứng minh tiếp theo", compact=True)
-        self.btn_auto = GadgetButton("auto", "Auto Solve", "Bóng tăng kích thước", "Agent tự suy luận từng bước", compact=True)
-        for button in (self.btn_menu, self.btn_restart, self.btn_hint, self.btn_auto):
-            header.addWidget(button)
-            button.clicked.connect(lambda: self.sound.play("click"))
-        header.addSpacing(6)
-
-        self.btn_mute = QPushButton("🔊")
-        self.btn_mute.setFixedWidth(44)
-        self.btn_mute.setToolTip("Bật/tắt âm thanh (phím M)")
-        self.btn_mute.clicked.connect(self._toggle_sound)
-        header.addWidget(self.btn_mute)
-
-        root.addLayout(header)
-
-        middle = QHBoxLayout()
-        middle.setSpacing(10)
-        self.grid = GridView()
-        middle.addWidget(self.grid, 1)
-        middle.addWidget(self._build_sidebar())
-        root.addLayout(middle, 1)
-
-        self.radial = RadialMenu(self.backdrop)
-        self.toast = ConanToast(self.backdrop)
-        self.effect = EffectOverlay(self.backdrop)
-        self.backdrop.resized.connect(self._layout_overlays)
-        self.stage.resized.connect(self._layout_iris)
-        self.menu.levelChosen.connect(self._on_level_chosen)
-        self.menu.conan.typed.connect(lambda: self.sound.play("type"))
-        self.grid.cardClicked.connect(self._on_card_clicked)
-        self.radial.chosen.connect(self._on_verdict_chosen)
-        self.clue_list.clueSelected.connect(self._select_clue)
-        self.btn_menu.clicked.connect(self._on_menu)
-        self.btn_restart.clicked.connect(self._on_restart)
-        self.btn_hint.clicked.connect(self._on_hint)
-        self.btn_auto.clicked.connect(self._on_auto)
-        self.btn_step.clicked.connect(self._step)
-        self.btn_stop.clicked.connect(self._stop_auto)
-
-    def _build_sidebar(self) -> QWidget:
-        side = QWidget()
-        side.setFixedWidth(330)
-        layout = QVBoxLayout(side)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(8)
-        self.notebook = NotebookPanel()
-        self.clue_list = ClueListView()
-        tabs = QTabWidget()
-        tabs.addTab(self.notebook, "Sổ tay")
-        tabs.addTab(self.clue_list, "Manh mối")
-        layout.addWidget(self.progress_label)
-        layout.addWidget(tabs, 1)
-        controls = QHBoxLayout()
-        self.btn_step = QPushButton("Bước tiếp ▶")
-        self.btn_stop = QPushButton("Dừng Auto")
-        controls.addWidget(self.btn_step)
-        controls.addWidget(self.btn_stop)
-        layout.addLayout(controls)
-        self.message_label = TerminalMessage()
-        self.message_label.setMinimumHeight(64)
-        layout.addWidget(self.message_label)
-        self.conan = ConanWidget()
-        self.conan.setFixedHeight(110)
-        self.conan.typed.connect(lambda: self.sound.play("type"))      # tiếng gõ phím khi Conan nói
-        layout.addWidget(self.conan)
-        return side
-
-    def _layout_overlays(self) -> None:
-        for overlay in (self.radial, self.effect):
-            if overlay.isVisible():
-                overlay.setGeometry(self.backdrop.rect())
-
-    def _layout_iris(self) -> None:
-        if self.iris.isVisible():
-            self.iris.setGeometry(self.stage.rect())
 
     def _toggle_sound(self) -> None:
         self.btn_mute.setText("🔊" if self.sound.toggle() else "🔇")
@@ -279,24 +165,32 @@ class MainWindow(PlayMixin, AutoMixin, QMainWindow):
             return
         self.sound.play("radial")
         path = str(DATA_DIR / key)
-        self._begin_transition(QPointF(anchor), lambda: self._enter_game(path))
+        level = self.menu.level_by_key(key)
+        place = level.place if level else ""
+        self._begin_transition(QPointF(anchor), lambda: self._enter_game(path, place))
 
-    def _enter_game(self, path: str) -> None:
+    def _enter_game(self, path: str, place: str = "") -> None:
         if self._load(path):                       # nạp lỗi thì ở lại bản đồ
+            self.backdrop.set_place(place)         # cảnh nền theo địa điểm của vụ án
             self.stage.setCurrentWidget(self.backdrop)
+            self._space.setEnabled(True)
             self.setWindowTitle(TITLE_GAME)
             self.sound.play("flip")
+            self._start_intro(place)
 
     def _open_directly(self, path: str) -> None:
         """`--puzzle <file>`: vào thẳng màn chơi, không qua bản đồ."""
         if self._load(path):
+            self.backdrop.set_place("")
             self.stage.setCurrentWidget(self.backdrop)
+            self._space.setEnabled(True)
             self.setWindowTitle(TITLE_GAME)
+            self._start_intro("", f"HỒ SƠ #{Path(path).stem.upper()}")
         else:
             self.stage.setCurrentWidget(self.menu)
 
     def _on_menu(self) -> None:
-        if self._busy or self._transitioning or self.stage.currentWidget() is self.menu:
+        if self._busy or self._transitioning or self._intro_active or self.stage.currentWidget() is self.menu:
             return
         self._stop_auto()
         self.radial.close_menu()
@@ -307,6 +201,8 @@ class MainWindow(PlayMixin, AutoMixin, QMainWindow):
         self._begin_transition(center, self._swap_to_menu)
 
     def _swap_to_menu(self) -> None:
+        self._space.setEnabled(False)
+        self._reset_view()
         self.stage.setCurrentWidget(self.menu)
         self.setWindowTitle(TITLE_MENU)
         self.menu.refresh()
@@ -356,6 +252,7 @@ class MainWindow(PlayMixin, AutoMixin, QMainWindow):
         self._hints_used = self._wrong_attempts = 0
         self._auto_used = self._recorded = False
         self.radial.close_menu()
+        self.backdrop.reset_mood()                          # xoá bình minh/hiệu ứng cũ khi làm lại
         self._refresh()
         self.conan.say("Sự thật chỉ có một! Chọn một hồ sơ úp rồi kết luận, nhưng đừng đoán mò nhé.", "think")
         self._say("Bấm vào hồ sơ úp để kết luận. Bấm hồ sơ đã mở để soi manh mối của nó.")
@@ -402,6 +299,10 @@ class MainWindow(PlayMixin, AutoMixin, QMainWindow):
     # ---- phím tắt / đóng cửa sổ ----------------------------------------------------------
     def keyPressEvent(self, event) -> None:
         if event.key() == Qt.Key.Key_Escape:
+            if self._intro_active:
+                self.intro.skip()
+            elif self._hud_hidden:
+                self._set_hud_hidden(False)
             self.radial.close_menu()
             self.effect.dismiss()
             self._select_clue(None)

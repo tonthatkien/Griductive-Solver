@@ -77,6 +77,7 @@ class PlayMixin:
             self._step_no += 1
             self._refresh(animate={cell})
             self.sound.play("correct")
+            self.backdrop.react_good()
             clue = next((c for c in self.kb.revealed_clues if c.owner == cell), None)
             used = agent_counters(self.agent)["sat_calls"] - before["sat_calls"]
             self.notebook.add_entry(self._step_no, "Người chơi", who, cell, verdict, [],
@@ -92,6 +93,7 @@ class PlayMixin:
             self._wrong_attempts += 1
             card.shake()
             self.sound.play("not_provable")
+            self.backdrop.react_bad()
             self.toast.popup("Chưa đủ bằng chứng!", "shake")
             self.notebook.add_note(f"NOT_PROVABLE: chưa thể kết luận {who} là {word}.", "#7a5a1a")
             self._say(f"NOT_PROVABLE: với manh mối hiện có, chưa ép buộc được {who} là {word} "
@@ -101,6 +103,7 @@ class PlayMixin:
             card.shake()
             self.effect.play("contradict")
             self.sound.play("thunder")
+            self.backdrop.react_bad()
             self.conan.say("Khoan đã! Kết luận này đi ngược với những gì logic đã chứng minh.", "shock")
             self.notebook.add_note(f"CONTRADICTED: kết luận ngược lại mới bị ép buộc ở {who}.", "#a3121f")
             self._say(f"CONTRADICTED: điều NGƯỢC LẠI mới là hệ quả bắt buộc đối với {who}. Thẻ vẫn úp.", "bad")

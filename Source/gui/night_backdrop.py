@@ -1,42 +1,83 @@
-"""NightBackdrop: nền thành phố ban đêm (trăng, sao, nhà cao tầng, đèn pin). (Scope F)
+"""NightBackdrop: nền màn chơi, đổi cảnh theo địa điểm của vụ án (xem gui/scenes). (Scope F)
+
+Ngoài việc vẽ cảnh còn có: lớp phủ tối (`veil`) để lưới thẻ dễ đọc nhưng có thể gỡ đi lúc mở màn / ngắm nền,
+và các phản ứng với ván chơi: `react_good`, `react_bad`, `play_dawn`.
 """
-import math
-import random
 from typing import Optional
 
-from PySide6.QtCore import (QPointF, QRectF, Signal)
-from PySide6.QtGui import (QBrush, QColor, QLinearGradient, QPainter,
-                           QPolygonF, QRadialGradient)
-from PySide6.QtWidgets import (QWidget)
+from PySide6.QtCore import QEasingCurve, QPointF, Signal
+from PySide6.QtGui import QBrush, QColor, QPainter, QRadialGradient
+from PySide6.QtWidgets import QWidget
 
-from gui import theme
-from gui.icons import NO_PEN
-from gui.anim import clock
+from gui.anim import Tween, clock
+from gui.scenes import Scene, scene_for
 
 
 class NightBackdrop(QWidget):
-    """Nền thành phố ban đêm: trăng, sao nhấp nháy, nhà cao tầng, vệt đèn pin quét chậm."""
+    """Nền màn chơi: mỗi địa điểm một cảnh động riêng; không rõ địa điểm thì là thành phố ban đêm."""
 
     resized = Signal()
+    clicked = Signal()          # bấm vào nền (khi giao diện đang ẩn thì cửa sổ chính dùng để hiện lại)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        rng = random.Random(11)
-        self._stars = [(rng.random(), rng.random() * 0.6, rng.uniform(0, 6.28), rng.uniform(0.6, 2.2))
-                       for _ in range(110)]
-        self._buildings, x = [], 0.0
-        while x < 1.0:
-            bw, bh = rng.uniform(0.04, 0.09), rng.uniform(0.07, 0.2)
-            lit = [rng.random() < 0.35 for _ in range(30)]
-            self._buildings.append((x, bw, bh, lit))
-            x += bw + rng.uniform(0.0, 0.01)
+        self._place = ""
+        self._scene: Scene = scene_for("")
         self._t, self._t0 = 0.0, clock().t
+        self._veil = 1.0
+        self._veil_tween = Tween(self, self._on_veil, QEasingCurve.Type.OutCubic)
+        self._veil_tween.now = 1.0
+        self._dawn = Tween(self, self._on_dawn, QEasingCurve.Type.InOutSine)
         clock().tick.connect(self._tick)
 
+    # ---- cảnh --------------------------------------------------------------------------
+    def set_place(self, place: str) -> None:
+        """Đổi cảnh nền theo tên địa điểm (Level.place). Gọi trước khi hiện màn chơi."""
+        self._place, self._scene = place, scene_for(place)
+        self._dawn.jump(0.0)
+        self.update()
+
+    # ---- lớp phủ tối -------------------------------------------------------------------
+    def set_veil(self, value: float, ms: int = 600) -> None:
+        """1 = phủ tối bình thường (thẻ dễ đọc), 0 = nền sáng rõ. Chạy mượt trong `ms`."""
+        self._veil_tween.go(value, ms)
+
+    def set_veil_now(self, value: float) -> None:
+        self._veil_tween.jump(value)
+
+    def _on_veil(self) -> None:
+        self._veil = self._veil_tween.now
+        self.update()
+
+    # ---- phản ứng với ván chơi ---------------------------------------------------------
+    def react_good(self) -> None:
+        """Phá án đúng: cảnh sáng lên một nhịp (mỗi cảnh có thể tự làm riêng)."""
+        self._scene.on_good(self._t)
+
+    def react_bad(self) -> None:
+        """Kết luận sai: đèn chập chờn rồi tối đi."""
+        self._scene.on_bad(self._t)
+
+    def play_dawn(self, ms: int = 2800) -> None:
+        """Thắng màn: đêm chuyển dần sang bình minh."""
+        self._dawn.go(1.0, ms)
+
+    def reset_mood(self) -> None:
+        self._dawn.jump(0.0)
+        self._scene.reset_mood()
+
+    def _on_dawn(self) -> None:
+        self._scene.set_dawn(self._dawn.now)
+
+    # ---- vẽ ----------------------------------------------------------------------------
     def _tick(self) -> None:
         self._t = clock().t - self._t0
         if self.isVisible():
             self.update()
+
+    def mousePressEvent(self, event) -> None:
+        self.clicked.emit()
+        super().mousePressEvent(event)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -46,40 +87,11 @@ class NightBackdrop(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = float(self.width()), float(self.height())
-        sky = QLinearGradient(0, 0, 0, h)
-        sky.setColorAt(0, QColor(theme.NIGHT_TOP))
-        sky.setColorAt(0.65, QColor(theme.NIGHT_MID))
-        sky.setColorAt(1, QColor(theme.NIGHT_BOTTOM))
-        p.fillRect(self.rect(), QBrush(sky))
-        moon = QPointF(w * 0.9, h * 0.13)
-        glow = QRadialGradient(moon, min(w, h) * 0.16)
-        glow.setColorAt(0, QColor(255, 244, 200, 120))
-        glow.setColorAt(1, QColor(255, 244, 200, 0))
-        p.fillRect(self.rect(), QBrush(glow))
-        p.setPen(NO_PEN)
-        p.setBrush(QColor("#fff4cf"))
-        p.drawEllipse(moon, min(w, h) * 0.035, min(w, h) * 0.035)
-        for sx, sy, phase, speed in self._stars:
-            alpha = int(60 + 150 * (0.5 + 0.5 * math.sin(self._t * speed + phase)))
-            p.setBrush(QColor(255, 255, 255, alpha))
-            p.drawEllipse(QPointF(sx * w, sy * h), 1.2, 1.2)
-        angle = math.radians(-62 + 10 * math.sin(self._t * 0.45))
-        origin, length, spread = QPointF(w * 0.04, h), h * 1.1, math.radians(9)
-        tip1 = origin + QPointF(math.cos(angle - spread), math.sin(angle - spread)) * length
-        tip2 = origin + QPointF(math.cos(angle + spread), math.sin(angle + spread)) * length
-        beam = QLinearGradient(origin, (tip1 + tip2) / 2)
-        beam.setColorAt(0, QColor(255, 255, 235, 46))
-        beam.setColorAt(1, QColor(255, 255, 235, 0))
-        p.setBrush(QBrush(beam))
-        p.drawPolygon(QPolygonF([origin, tip1, tip2]))
-        for bx, bw, bh, lit in self._buildings:
-            rect = QRectF(bx * w, h - bh * h, bw * w, bh * h)
-            p.setBrush(QColor("#060b19"))
-            p.drawRect(rect)
-            cols, rows = 3, 6
-            for i in range(cols * rows):
-                if lit[i % len(lit)]:
-                    wx = rect.left() + rect.width() * (0.15 + 0.28 * (i % cols))
-                    wy = rect.top() + rect.height() * (0.1 + 0.14 * (i // cols))
-                    p.setBrush(QColor(242, 193, 78, 150))
-                    p.drawRect(QRectF(wx, wy, rect.width() * 0.14, rect.height() * 0.07))
+        self._scene.paint(p, w, h, self._t, self.devicePixelRatioF())
+        # lớp phủ tối nhẹ ở giữa (cho lưới thẻ dễ đọc) + tối dần ra mép (vignette)
+        v = self._veil
+        veil = QRadialGradient(QPointF(w / 2, h / 2), max(w, h) * 0.75)
+        veil.setColorAt(0, QColor(0, 0, 0, int(85 * v)))
+        veil.setColorAt(0.6, QColor(0, 0, 0, int(55 * v)))
+        veil.setColorAt(1, QColor(0, 0, 0, int(90 + 60 * v)))
+        p.fillRect(self.rect(), QBrush(veil))

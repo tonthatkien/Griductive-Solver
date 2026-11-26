@@ -1,6 +1,6 @@
 """GridView: lưới N×N các thẻ + nhãn tọa độ. (Scope F)
 """
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from PySide6.QtCore import (Qt,
                             Signal)
@@ -18,6 +18,7 @@ class GridView(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.cards: Dict[str, CardView] = {}
+        self._order: List[Tuple[int, int, CardView]] = []
         self._layout = QGridLayout(self)
         self._layout.setSpacing(12)
         self._layout.setContentsMargins(6, 6, 6, 6)
@@ -31,6 +32,7 @@ class GridView(QWidget):
                 widget.setParent(None)
                 widget.deleteLater()
         self.cards = {}
+        self._order = []
         # QGridLayout nhớ stretch/min-size của hàng/cột cũ: reset hết, nếu không
         # hàng/cột thừa của lưới 5x5 vẫn chiếm chỗ khi quay lại 3x3.
         for i in range(max(self._layout.rowCount(), self._layout.columnCount())):
@@ -52,6 +54,7 @@ class GridView(QWidget):
                 card.clicked.connect(self.cardClicked)
                 self._layout.addWidget(card, r + 1, c + 1)
                 self.cards[cell] = card
+                self._order.append((r, c, card))
         for i in range(1, n + 1):
             self._layout.setRowStretch(i, 1)
             self._layout.setColumnStretch(i, 1)
@@ -66,6 +69,11 @@ class GridView(QWidget):
         if height:
             label.setFixedHeight(height)
         return label
+
+    def stagger_in(self, delay_ms: int = 0, step_ms: int = 70) -> None:
+        """Cho các thẻ lật vào lần lượt theo đường chéo, bắt đầu sau `delay_ms`."""
+        for r, c, card in self._order:
+            card.appear(delay_ms + (r + c) * step_ms)
 
     def set_input_enabled(self, enabled: bool) -> None:
         for card in self.cards.values():
