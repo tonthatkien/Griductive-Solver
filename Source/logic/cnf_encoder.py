@@ -12,6 +12,7 @@ Các encoding đã cài (đều tự động, KHÔNG viết tay CNF cho từng p
       EXACTLY k         : AT_MOST k ∧ AT_LEAST k
       PARITY            : chuỗi XOR (Tseitin), m-2 biến phụ, 4m-6 clause
       COMPARE           : hai bộ đếm unary rồi nối, |R|(|R|+1)/2 biến phụ mỗi vùng
+      NOISE             : không sinh clause nào, 0 biến phụ (clue luôn đúng, không thêm thông tin)
       build_kb          : CNF(clue đã lật) ∧ unit clause ô đã chứng minh; đếm lại biến phụ mỗi lần
       status = INNOCENT thì đảo cực literal của các ô trong vùng.
 
@@ -140,9 +141,12 @@ class Encoder:
     def encode_clue(self, clue: Clue) -> List[Clause]:
         """
         Đổi một clue sang CNF (FACT, SAME_STATUS, DIFFERENT_STATUS,
-                            EXACTLY, AT_LEAST, AT_MOST, PARITY, COMPARE)
+                            EXACTLY, AT_LEAST, AT_MOST, PARITY, COMPARE, NOISE)
+        NOISE trả về [] (luôn đúng nên KB không đổi).
         """
         validate_clue(clue, self.n)
+        if clue.type == "NOISE":
+            return []
         if clue.type == "FACT":
             return self._encode_fact(clue)
         if clue.type == "SAME_STATUS":

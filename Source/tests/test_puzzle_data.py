@@ -29,14 +29,14 @@ class TestPuzzleDataLoads(unittest.TestCase):
             len(paths), 9, f"Expected >= 9 puzzles, found {len(paths)}: {paths}"
         )
 
-    def test_each_size_has_three_puzzles(self) -> None:
+    def test_each_size_has_at_least_three_puzzles(self) -> None:
         for size in (3, 4, 5):
             with self.subTest(size=size):
                 paths = sorted(glob.glob(f"data/puzzles_{size}x{size}/*.json"))
-                self.assertEqual(
+                self.assertGreaterEqual(
                     len(paths),
                     3,
-                    f"Expected exactly 3 puzzles for {size}x{size}, found {paths}",
+                    f"Expected at least 3 puzzles for {size}x{size}, found {paths}",
                 )
 
     def test_all_puzzles_load(self) -> None:

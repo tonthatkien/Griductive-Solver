@@ -13,10 +13,14 @@
   COMPARE           {"region1": <region>, "region2": <region>,
                      "op": "GT"|"GE"|"EQ"|"LE"|"LT", "status": ...}
 
+  -- Noise (thẻ gây nhiễu, không mang thông tin logic) --
+  NOISE             {"text": "Tôi thích trồng hoa."}   (không có region, k, status)
+
   status ∈ {"CRIMINAL", "INNOCENT"}.
     - FACT: BẮT BUỘC có status (không có mặc định).
     - EXACTLY/AT_LEAST/AT_MOST/PARITY/COMPARE: bỏ qua thì mặc định "CRIMINAL" (dùng clue_status()).
     - SAME_STATUS/DIFFERENT_STATUS: không dùng status.
+    - NOISE: không dùng status.
 
   <region> = {"type": "row", "number": 2}
            | {"type": "col", "letter": "B"}
@@ -40,6 +44,7 @@ class Clue:
 
 CORE_TYPES = ("FACT", "SAME_STATUS", "DIFFERENT_STATUS", "EXACTLY", "AT_LEAST", "AT_MOST")
 EXT_TYPES = ("PARITY", "COMPARE")
+NOISE_TYPE = "NOISE"  # thẻ gây nhiễu: luôn đúng, không sinh clause, không có ô nào để highlight
 
 # Hằng CRIMINAL/INNOCENT lấy từ engine.constants (không import từ game_state: game_state đã import clue).
 COUNT_TYPES = ("EXACTLY", "AT_LEAST", "AT_MOST")
@@ -59,14 +64,15 @@ def clue_from_dict(owner: str, d: dict) -> Clue:
 def clue_status(clue: Clue) -> str:
     """status của clue (encoder C và semantic D đều gọi hàm này).
 
-    FACT: bắt buộc có status. SAME_STATUS/DIFFERENT_STATUS: không có status.
+    FACT: bắt buộc có status. SAME_STATUS/DIFFERENT_STATUS/NOISE: không có status.
     Các loại còn lại: bỏ qua thì mặc định CRIMINAL.
 
     Raises:
-        ValueError: FACT thiếu status, hoặc clue SAME_STATUS/DIFFERENT_STATUS (không dùng status).
+        ValueError: FACT thiếu status, hoặc clue SAME_STATUS/DIFFERENT_STATUS/NOISE
+            (không dùng status).
     """
     t, p = clue.type, clue.params
-    if t in PAIR_TYPES:
+    if t in PAIR_TYPES or t == NOISE_TYPE:
         raise ValueError(f"{t} không dùng status")
     if t == "FACT":
         if "status" not in p:
@@ -103,7 +109,7 @@ def clue_cells(clue: Clue, n: int) -> List[str]:
     """Các ô mà clue nhắc tới (để GUI highlight), không trùng, thứ tự row-major.
 
     FACT -> [target]; SAME_STATUS/DIFFERENT_STATUS -> [cell1, cell2]; counting/PARITY -> resolve_region;
-    COMPARE -> region1 + region2 (hợp của hai vùng).
+    COMPARE -> region1 + region2 (hợp của hai vùng); NOISE -> [] (không nhắc tới ô nào).
     Không gồm ô `owner` trừ khi chính clue nhắc tới ô đó.
 
     Raises:
@@ -118,6 +124,8 @@ def clue_cells(clue: Clue, n: int) -> List[str]:
         cells = resolve_region(p["region"], n)
     elif t == "COMPARE":
         cells = resolve_region(p["region1"], n) + resolve_region(p["region2"], n)
+    elif t == NOISE_TYPE:
+        cells = []
     else:
         raise ValueError(f"Kiểu clue không hợp lệ: {t!r}")
     return _sorted_unique(cells, n)
@@ -173,6 +181,7 @@ def validate_clue(clue: Clue, n: int) -> None:
        - 0 <= k <= |region| với EXACTLY/AT_LEAST/AT_MOST (k là int, không phải bool)
        - SAME_STATUS/DIFFERENT_STATUS: cell1 khác cell2 (clue về một ô với chính nó vô nghĩa)
        - type, parity, op hợp lệ
+       - NOISE: có `text` là chuỗi không rỗng (không dùng region/k/status)
        - status: FACT bắt buộc có; EXACTLY/AT_LEAST/AT_MOST/PARITY/COMPARE tùy chọn (mặc định
          CRIMINAL); SAME_STATUS/DIFFERENT_STATUS không dùng. Nếu có thì phải thuộc STATUSES.
        - thiếu tham số cũng báo ValueError (không KeyError)
@@ -206,5 +215,9 @@ def validate_clue(clue: Clue, n: int) -> None:
         if p.get("op") not in COMPARE_OPS:
             raise ValueError(f"{t}: op {p.get('op')!r} phải thuộc {COMPARE_OPS}")
         _check_status(p, t)
+    elif t == NOISE_TYPE:
+        text = p.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise ValueError(f"{t}: 'text' phải là chuỗi không rỗng, nhận {text!r}")
     else:
         raise ValueError(f"Kiểu clue không hợp lệ: {t!r}")

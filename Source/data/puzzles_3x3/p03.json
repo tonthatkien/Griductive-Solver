@@ -1,16 +1,20 @@
 {
  "n": 3,
- "title": "Vụ án tại sở cảnh sát Tokyo",
+ "title": "Vụ án ở thư viện Beika",
  "characters": [
   {
    "cell": "A1",
    "name": "Agasa",
    "profession": "Nhà phát minh",
-   "criminal": true,
+   "criminal": false,
    "clue": {
-    "type": "SAME_STATUS",
-    "cell1": "C1",
-    "cell2": "C2"
+    "type": "EXACTLY",
+    "region": {
+     "type": "col",
+     "letter": "C"
+    },
+    "k": 0,
+    "status": "INNOCENT"
    }
   },
   {
@@ -23,36 +27,31 @@
     "parity": "ODD",
     "region": {
      "type": "neighbors",
-     "cell": "B1"
-    },
-    "status": "INNOCENT"
-   }
-  },
-  {
-   "cell": "C1",
-   "name": "Akai",
-   "profession": "Đặc vụ FBI",
-   "criminal": true,
-   "clue": {
-    "type": "PARITY",
-    "parity": "ODD",
-    "region": {
-     "type": "neighbors",
-     "cell": "C2"
+     "cell": "B2"
     },
     "status": "CRIMINAL"
    }
   },
   {
-   "cell": "A2",
-   "name": "Amuro",
-   "profession": "Phục vụ quán cà phê",
+   "cell": "C1",
+   "name": "Conan",
+   "profession": "Thám tử nhí",
    "criminal": true,
    "clue": {
-    "type": "AT_LEAST",
+    "type": "NOISE",
+    "text": "Tôi rất thích đọc truyện trinh thám."
+   }
+  },
+  {
+   "cell": "A2",
+   "name": "Makoto",
+   "profession": "Vận động viên Karate",
+   "criminal": false,
+   "clue": {
+    "type": "EXACTLY",
     "region": {
-     "type": "neighbors",
-     "cell": "C1"
+     "type": "col",
+     "letter": "B"
     },
     "k": 2,
     "status": "INNOCENT"
@@ -60,77 +59,79 @@
   },
   {
    "cell": "B2",
-   "name": "Chiba",
-   "profession": "Cảnh sát",
-   "criminal": false,
+   "name": "Megure",
+   "profession": "Thanh tra",
+   "criminal": true,
    "clue": {
-    "type": "FACT",
-    "target": "A1",
-    "status": "CRIMINAL"
+    "type": "EXACTLY",
+    "region": {
+     "type": "list",
+     "cells": [
+      "A1",
+      "B1",
+      "A2",
+      "B3",
+      "C3"
+     ]
+    },
+    "k": 4,
+    "status": "INNOCENT"
    }
   },
   {
    "cell": "C2",
-   "name": "Jodie",
-   "profession": "Giáo viên",
+   "name": "Mitsuhiko",
+   "profession": "Học sinh",
    "criminal": true,
    "clue": {
-    "type": "AT_MOST",
-    "region": {
-     "type": "neighbors",
-     "cell": "B2"
-    },
-    "k": 5,
-    "status": "INNOCENT"
+    "type": "NOISE",
+    "text": "Tôi thích sưu tầm tem cũ."
    }
   },
   {
    "cell": "A3",
-   "name": "Kaito",
-   "profession": "Ảo thuật gia",
+   "name": "Shinichi",
+   "profession": "Thám tử học sinh",
    "criminal": false,
    "clue": {
-    "type": "FACT",
-    "target": "B2",
-    "status": "INNOCENT"
+    "type": "PARITY",
+    "parity": "ODD",
+    "region": {
+     "type": "col",
+     "letter": "C"
+    },
+    "status": "CRIMINAL"
    }
   },
   {
    "cell": "B3",
-   "name": "Shiratori",
-   "profession": "Thanh tra",
-   "criminal": false,
-   "clue": {
-    "type": "COMPARE",
-    "region1": {
-     "type": "col",
-     "letter": "B"
-    },
-    "op": "GT",
-    "region2": {
-     "type": "col",
-     "letter": "C"
-    },
-    "status": "INNOCENT"
-   }
-  },
-  {
-   "cell": "C3",
    "name": "Subaru",
    "profession": "Sinh viên",
    "criminal": false,
    "clue": {
-    "type": "EXACTLY",
+    "type": "SAME_STATUS",
+    "cell1": "B3",
+    "cell2": "A1"
+   }
+  },
+  {
+   "cell": "C3",
+   "name": "Yusaku",
+   "profession": "Tiểu thuyết gia",
+   "criminal": true,
+   "clue": {
+    "type": "AT_LEAST",
     "region": {
      "type": "row",
      "number": 3
     },
-    "k": 0,
-    "status": "CRIMINAL"
+    "k": 1,
+    "status": "INNOCENT"
    }
   }
  ],
  "initially_revealed": [
+  "B2",
   "C3"
  ]
 }

@@ -347,6 +347,18 @@ def eval_compare(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
     return _COMPARE_FUNCS[op](count1, count2)
 
 
+def eval_noise(clue: Any, assignment: Dict[str, bool], n: int) -> bool:
+    """Đánh giá clue NOISE (thẻ gây nhiễu): luôn đúng với mọi assignment.
+
+    Clue này chỉ mang câu chữ (`text`), không nhắc tới ô nào nên không đọc `assignment`.
+    """
+    _, params = _extract_clue_data(clue)
+    text = params.get("text")
+    if not isinstance(text, str) or not text.strip():
+        raise ValueError(f"NOISE clue cần 'text' là chuỗi không rỗng: {params}")
+    return True
+
+
 CLUE_EVALUATORS: Dict[str, Callable[[Any, Dict[str, bool], int], bool]] = {
     "FACT": eval_fact,
     "SAME_STATUS": eval_same_status,
@@ -356,6 +368,7 @@ CLUE_EVALUATORS: Dict[str, Callable[[Any, Dict[str, bool], int], bool]] = {
     "AT_MOST": eval_at_most,
     "PARITY": eval_parity,
     "COMPARE": eval_compare,
+    "NOISE": eval_noise,
 }
 
 

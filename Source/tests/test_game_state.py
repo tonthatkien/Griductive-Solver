@@ -85,6 +85,49 @@ class InitialStateTest(unittest.TestCase):
         self.assertNotIn("B2", [c.owner for c in kb.revealed_clues])
 
 
+NOISE_TEXT = "Tôi thích trồng hoa."
+
+
+def p01_with_noise(cell: str = "B2") -> dict:
+    """p01 mà thẻ ở `cell` được thay bằng clue NOISE (chỉ để test nạp/lật thẻ)."""
+    data = p01()
+    for character in data["characters"]:
+        if character["cell"] == cell:
+            character["clue"] = {"type": "NOISE", "text": NOISE_TEXT}
+    return data
+
+
+class NoiseCardTest(unittest.TestCase):
+    def test_puzzle_with_noise_card_loads(self):
+        engine = GameEngine()
+        engine.load_puzzle(p01_with_noise())
+        self.assertEqual(len(engine.characters), 9)
+
+    def test_face_down_noise_card_is_not_in_public_kb(self):
+        engine = GameEngine()
+        engine.load_puzzle(p01_with_noise())
+        kb = engine.get_public_kb()
+        self.assertNotIn("B2", [c.owner for c in kb.revealed_clues])
+        self.assertNotIn("B2", kb.proved)
+
+    def test_flipped_noise_card_reaches_public_kb_with_its_text(self):
+        engine = GameEngine()
+        engine.load_puzzle(p01_with_noise())
+        engine._revealed.add("B2")  # giả lập lật thẻ, giống các test khác trong file
+        kb = engine.get_public_kb()
+        clue = next(c for c in kb.revealed_clues if c.owner == "B2")
+        self.assertEqual((clue.type, clue.params), ("NOISE", {"text": NOISE_TEXT}))
+        self.assertEqual(kb.proved["B2"], CRIMINAL)
+
+    def test_noise_card_without_text_is_rejected(self):
+        data = p01_with_noise()
+        for character in data["characters"]:
+            if character["cell"] == "B2":
+                character["clue"].pop("text")
+        with self.assertRaises(ValueError):
+            GameEngine().load_puzzle(data)
+
+
 class RestartTest(unittest.TestCase):
     def test_restart_returns_to_initial_state(self):
         engine = loaded_engine()
