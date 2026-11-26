@@ -12,7 +12,7 @@ Cách đếm các cột kết quả:
 - `unique`: kiểm tra bằng `uniqueness_check` trên toàn bộ clue của file JSON
   kèm `FACT` cho các ô `initially_revealed`, ghi `UNIQUE`, `MULTIPLE`, `UNSAT`
   hoặc `TIMEOUT` (hết giờ ở bước này không đổi `status`). Bước này chạy tách
-  biệt, không cộng vào `sat_calls` và `runtime_sec`.
+  biệt, không cộng vào `sat_calls`, các bộ đếm DPLL hay `runtime_sec`.
 - `sat_calls`: tổng số lần `LogicAgent` gọi `DPLLSolver.solve`, gồm truy vấn
   kiểm chứng của engine, lần kiểm tra KB cuối và truy vấn bị timeout.
 - `trace_sat_calls`: tổng `len(entry.sat_queries)` qua các bước `ACCEPTED`
@@ -29,6 +29,8 @@ Cách đếm các cột kết quả:
 - `primary_vars`, `aux_vars`, `clauses`: đếm bằng `Encoder.build_kb` trên
   `PublicKB` lúc dừng (lượt quét cuối, hoặc lúc timeout/lỗi); để trống nếu
   chưa có engine hoặc `build_kb` lỗi.
+- `deduction_steps`, `runtime_sec`: số bước `ACCEPTED` trong `agent.trace` và
+  thời gian nạp puzzle với chạy `auto_solve` (giây).
 - `reveal_waves`: số lượt gom và nộp toàn bộ ô bị ép từ `PublicKB` hiện tại
   trong một lượt chạy riêng bằng `LogicAgent.classify`; không cộng vào
   `sat_calls`, các bộ đếm DPLL hay `runtime_sec`, và để trống khi truyền sẵn
