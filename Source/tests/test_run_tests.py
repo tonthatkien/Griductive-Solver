@@ -476,6 +476,38 @@ class RunTestsStatusRowsTests(unittest.TestCase):
                     self.assertEqual(row["sat_calls"], solve_agent.sat_calls)
                     self.assertIn(err_text, stderr.getvalue())
 
+    def test_dpll_counters_match_solver_stats_and_exclude_extra_passes(self) -> None:
+        cases = (
+            ("puzzles_3x3/p02.json", False),
+            ("puzzles_4x4/p03.json", True),
+        )
+        for rel_path, expect_backtracks in cases:
+            with self.subTest(puzzle=rel_path):
+                puzzle_path = DATA_DIR / rel_path
+                engine = GameEngine()
+                engine.load_puzzle(puzzle_path)
+                agent = LogicAgent(timeout=10)
+                agent.auto_solve(engine)
+
+                row = run_one(puzzle_path, timeout=10)
+                self.assertGreater(row["decisions"], 0)
+                self.assertGreater(row["propagations"], 0)
+                if expect_backtracks:
+                    self.assertGreater(row["backtracks"], 0)
+                self.assertEqual(len(agent.sat_queries), row["sat_calls"])
+                self.assertEqual(
+                    row["decisions"],
+                    sum(q.stats.decisions for q in agent.sat_queries),
+                )
+                self.assertEqual(
+                    row["propagations"],
+                    sum(q.stats.propagations for q in agent.sat_queries),
+                )
+                self.assertEqual(
+                    row["backtracks"],
+                    sum(q.stats.backtracks for q in agent.sat_queries),
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

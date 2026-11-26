@@ -20,6 +20,12 @@ Cách đếm các cột kết quả:
 - `untraced_sat_calls`: `sat_calls - trace_sat_calls` (các truy vấn ngoài
   `agent.trace`: kiểm chứng của engine, lượt quét cuối khi dừng và lượt quét
   dở trước khi timeout).
+- `decisions`, `propagations`, `backtracks`: cộng từ `SolverStats` (D4) qua mọi
+  truy vấn trong `sat_calls`, gồm cả truy vấn kiểm chứng của engine và truy vấn
+  bị timeout, không gồm `uniqueness_check` và lượt đếm `reveal_waves`:
+  `decisions` là số lần chọn biến rẽ nhánh trong `_dpll`, `propagations` là số
+  literal gán qua unit clause (không tính `assumptions`), `backtracks` là số
+  nhánh trả `UNSAT`.
 - `primary_vars`, `aux_vars`, `clauses`: đếm bằng `Encoder.build_kb` trên
   `PublicKB` lúc dừng (lượt quét cuối, hoặc lúc timeout/lỗi); để trống nếu
   chưa có engine hoặc `build_kb` lỗi.
