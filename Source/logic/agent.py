@@ -16,7 +16,6 @@ from typing import Callable, List, Literal, Protocol
 from engine import board
 from engine.constants import ACCEPTED, CRIMINAL, INCONSISTENT, INNOCENT, UNKNOWN
 from engine.clue import Clue
-from engine.constants import CRIMINAL, INCONSISTENT, INNOCENT, UNKNOWN
 from engine.game_state import PublicKB
 from logic.cnf_encoder import Encoder, KB
 from logic.dpll import DPLLSolver, SolveResult, SolverStats
@@ -64,9 +63,10 @@ class TraceEntry:
 class LogicAgent:
     """Phân loại bằng KB công khai và cộng dồn thống kê các truy vấn SAT.
 
-    timeout là giới hạn giây cho MỖI truy vấn DPLL, None nghĩa là không giới hạn.
-    sat_queries lưu lịch sử; last_queries chỉ chứa truy vấn của lần classify gần
-    nhất, kể cả truy vấn TIMEOUT. total_runtime cộng tổng thời gian DPLL, không gồm encode.
+    timeout là giới hạn giây cho mỗi truy vấn DPLL; None nghĩa là không giới hạn.
+    sat_queries lưu lịch sử; last_queries giữ các truy vấn của lần classify hoặc
+    next_forced gần nhất, kể cả truy vấn TIMEOUT. total_runtime cộng tổng thời
+    gian DPLL, không gồm encode.
     """
 
     def __init__(self, *, timeout: float | None = None) -> None:
@@ -107,6 +107,26 @@ class LogicAgent:
             )
         return result
 
+    def _validate_public_kb(self, public_kb: PublicKB, caller: str) -> int:
+        if not isinstance(public_kb, PublicKB):
+            raise ValueError(f"{caller} chỉ nhận PublicKB")
+        n = public_kb.n
+        if type(n) is not int or not 1 <= n <= len(board.COLS):
+            raise ValueError("Kích thước PublicKB không hợp lệ")
+        if not isinstance(public_kb.proved, Mapping):
+            raise ValueError("PublicKB.proved phải là mapping")
+        return n
+
+    def _classify_kb(self, kb: KB, n: int, cell: str, *, check_kb: bool) -> str:
+        var = board.var_of(cell, n)
+        if check_kb and not self._query(kb, cell).sat:
+            return INCONSISTENT
+        if not self._query(kb, cell, (-var,)).sat:
+            return CRIMINAL
+        if not self._query(kb, cell, (var,)).sat:
+            return INNOCENT
+        return UNKNOWN
+
     def classify(self, public_kb: PublicKB, cell: str) -> str:
         """Trả CRIMINAL/INNOCENT/UNKNOWN/INCONSISTENT, không đọc dữ liệu ẩn.
 
@@ -116,55 +136,37 @@ class LogicAgent:
         Raises: ValueError nếu đầu vào sai; TimeoutError nếu DPLL chưa kết luận.
         """
         self.last_queries = []
-        if not isinstance(public_kb, PublicKB):
-            raise ValueError("classify chỉ nhận PublicKB")
-        n = public_kb.n
-        if type(n) is not int or not 1 <= n <= len(board.COLS):
-            raise ValueError("Kích thước PublicKB không hợp lệ")
-        if not isinstance(public_kb.proved, Mapping):
-            raise ValueError("PublicKB.proved phải là mapping")
+        n = self._validate_public_kb(public_kb, "classify")
         if not isinstance(cell, str) or not board.is_valid_cell(cell, n):
             raise ValueError(f"Ô cần phân loại không hợp lệ: {cell!r}")
         kb = Encoder(n).build_kb(public_kb)
-        var = board.var_of(cell, n)
-        if not self._query(kb, cell).sat:
-            return INCONSISTENT
-        if not self._query(kb, cell, (-var,)).sat:
-            return CRIMINAL
-        if not self._query(kb, cell, (var,)).sat:
-            return INNOCENT
-        return UNKNOWN
+        return self._classify_kb(kb, n, cell, check_kb=True)
 
     def next_forced(self, public_kb: PublicKB) -> tuple[str, str] | None:
         """Chọn ô chưa chứng minh đầu tiên bị ép theo row-major, không sửa PublicKB.
 
-        Trả None khi STUCK, SOLVED hoặc KB INCONSISTENT; không gửi một verdict từ
-        KB mâu thuẫn. Kiểm tra cả trường hợp mọi ô đã proved để không báo SOLVED
-        khi snapshot vẫn chứa clue mâu thuẫn. Timeout của classify được truyền ra.
+        Build KB và kiểm tra tính nhất quán của KB một lần cho mỗi lượt quét, rồi
+        thử tối đa hai giả định cho từng ô chưa chứng minh. Trả None khi STUCK,
+        SOLVED hoặc KB INCONSISTENT; kiểm tra cả khi mọi ô đã proved để không báo
+        SOLVED trên snapshot mâu thuẫn. Timeout của DPLL được truyền ra.
         """
         self._selection_status = None
-        if not isinstance(public_kb, PublicKB):
-            raise ValueError("next_forced chỉ nhận PublicKB")
-        n = public_kb.n
-        if type(n) is not int or not 1 <= n <= len(board.COLS):
-            raise ValueError("Kích thước PublicKB không hợp lệ")
-        if not isinstance(public_kb.proved, Mapping):
-            raise ValueError("PublicKB.proved phải là mapping")
+        self.last_queries = []
+        n = self._validate_public_kb(public_kb, "next_forced")
+        kb = Encoder(n).build_kb(public_kb)
         cells = board.all_cells(n)
         remaining = [cell for cell in cells if cell not in public_kb.proved]
+        kb_cell = remaining[0] if remaining else cells[0]
+        if not self._query(kb, kb_cell).sat:
+            self._selection_status = INCONSISTENT
+            return None
         for cell in remaining:
-            status = self.classify(public_kb, cell)
-            if status == INCONSISTENT:
-                self._selection_status = INCONSISTENT
-                return None
+            status = self._classify_kb(kb, n, cell, check_kb=False)
             if status in (CRIMINAL, INNOCENT):
                 return cell, status
             if status != UNKNOWN:
                 raise RuntimeError(f"classify trả trạng thái không hợp lệ: {status!r}")
-        if not remaining and self.classify(public_kb, cells[0]) == INCONSISTENT:
-            self._selection_status = INCONSISTENT
-        else:
-            self._selection_status = SOLVED if not remaining else STUCK
+        self._selection_status = SOLVED if not remaining else STUCK
         return None
 
     def hint(self, public_kb):

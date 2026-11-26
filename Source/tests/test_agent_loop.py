@@ -15,6 +15,7 @@ from engine.constants import (
 )
 from engine.game_state import GameEngine, PublicKB
 from logic.agent import LogicAgent, SOLVED, STUCK, TIMEOUT
+from logic.cnf_encoder import Encoder
 from tools.brute_force import check_public_kb
 
 DATA = Path(__file__).resolve().parents[1] / "data"
@@ -130,6 +131,7 @@ class NextForcedTests(unittest.TestCase):
         self.assertIsNone(agent.next_forced(public))
         bad = PublicKB(1, (fact("A1", INNOCENT),), {"A1": CRIMINAL})
         self.assertIsNone(agent.next_forced(bad))
+        self.assertEqual(agent.sat_calls, 2)
         self.assertEqual(agent.last_queries[-1].status, "UNSAT")
 
     def test_snapshot_is_not_mutated(self) -> None:
@@ -157,9 +159,20 @@ class NextForcedTests(unittest.TestCase):
 
     def test_unknown_classifier_status_is_not_returned_as_a_verdict(self) -> None:
         agent = LogicAgent()
-        with patch.object(agent, "classify", return_value="INVALID"):
+        with patch.object(agent, "_classify_kb", return_value="INVALID"):
             with self.assertRaises(RuntimeError):
                 agent.next_forced(PublicKB(3))
+
+    def test_next_forced_builds_and_checks_kb_once_per_scan(self) -> None:
+        agent = LogicAgent()
+        public = PublicKB(3, (fact("C1", CRIMINAL),))
+        with patch.object(Encoder, "build_kb", autospec=True,
+                          side_effect=Encoder.build_kb) as build_kb:
+            self.assertEqual(agent.next_forced(public), ("C1", CRIMINAL))
+        self.assertEqual(build_kb.call_count, 1)
+        self.assertEqual([q.assumptions for q in agent.last_queries],
+                         [(), (-1,), (1,), (-2,), (2,), (-3,)])
+        self.assertEqual(agent.sat_calls, 6)
 
     def test_timeout_propagates_without_a_choice(self) -> None:
         with self.assertRaises(TimeoutError):
