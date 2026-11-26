@@ -10,7 +10,8 @@ from unittest.mock import patch
 
 from engine import board
 from engine.clue import Clue, clue_from_dict
-from engine.constants import CRIMINAL, INNOCENT
+from engine.constants import CRIMINAL, INCONSISTENT, INNOCENT
+from logic.agent import SOLVED, STUCK
 from tools.brute_force import count_solutions
 from tools.puzzle_check import DATA, audit_dataset, main, puzzle_digest, semantic_count
 
@@ -60,6 +61,36 @@ class SemanticEnumerationTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "bad evaluator"):
                 semantic_count((fact("A1"),), 3)
 
+    def test_non_boolean_evaluator_is_rejected(self) -> None:
+        for result in (None, 0, 1, "False"):
+            with self.subTest(result=result), \
+                    patch("tools.puzzle_check.evaluate", return_value=result):
+                with self.assertRaisesRegex(TypeError, "must return bool"):
+                    semantic_count((fact("A1"),), 3)
+
+    def test_preflight_reaches_bad_clue_after_early_contradiction(self) -> None:
+        broken = fact("C3")
+
+        def evaluator(clue: Clue, assignment: dict[str, bool], n: int) -> bool:
+            if clue is broken:
+                raise RuntimeError("late clue error")
+            return False
+
+        with patch("tools.puzzle_check.evaluate", side_effect=evaluator):
+            with self.assertRaisesRegex(RuntimeError, "late clue error"):
+                semantic_count((fact("A1"), broken), 3)
+
+    def test_unknown_demo_has_clear_error_before_audit(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "demo_cases").mkdir()
+            (root / "demo_cases" / "new_case.json").write_text("{}", encoding="utf-8")
+            with patch("tools.puzzle_check.DATA", root), \
+                    patch("tools.puzzle_check.audit_puzzle") as audit:
+                with self.assertRaisesRegex(ValueError, "Missing demo expectation: new_case.json"):
+                    audit_dataset()
+                audit.assert_not_called()
+
 
 class DatasetAuditTests(unittest.TestCase):
     """Audit acceptance requires separate expectations for standard and demo puzzles."""
@@ -75,7 +106,7 @@ class DatasetAuditTests(unittest.TestCase):
             with self.subTest(path=row["path"]):
                 self.assertTrue(row["passes_expectation"])
                 self.assertTrue(row["stored_labels_satisfy_all_clues"])
-                self.assertEqual(row["agent_status"], "SOLVED")
+                self.assertEqual(row["agent_status"], SOLVED)
                 for key in ("clues_only", "clues_plus_initial_facts"):
                     self.assertEqual(row[key]["semantic_count_exact"], 1)
                     self.assertTrue(row[key]["agreement"])
@@ -84,8 +115,8 @@ class DatasetAuditTests(unittest.TestCase):
         demos = {Path(r["path"]).stem: r for r in self.report["results"]
                  if r["path"].startswith("demo_cases/")}
         self.assertEqual(set(demos), {"ambiguous", "inconsistent"})
-        for name, status, count in (("ambiguous", "STUCK", 256),
-                                    ("inconsistent", "INCONSISTENT", 0)):
+        for name, status, count in (("ambiguous", STUCK, 256),
+                                    ("inconsistent", INCONSISTENT, 0)):
             row = demos[name]
             self.assertTrue(row["passes_expectation"])
             self.assertEqual(row["agent_status"], status)
@@ -121,7 +152,7 @@ class PortableReportTests(unittest.TestCase):
     def test_out_writes_utf8_without_bom_or_crlf(self) -> None:
         report = {"all_passed": True, "title": "Vụ án"}
         with TemporaryDirectory() as directory:
-            output = Path(directory) / "result.json"
+            output = Path(directory) / "nested" / "reports" / "result.json"
             with patch("sys.argv", ["puzzle_check", "--out", str(output)]), \
                     patch("tools.puzzle_check.audit_dataset", return_value=report), \
                     patch("sys.stdout", new_callable=io.StringIO) as stdout:

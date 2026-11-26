@@ -9,17 +9,29 @@ from pathlib import Path
 
 from engine import board
 from engine.clue import Clue, clue_cells, clue_from_dict
+from engine.constants import INCONSISTENT
 from engine.game_state import GameEngine
-from logic.agent import LogicAgent, uniqueness_check
+from logic.agent import SOLVED, STUCK, LogicAgent, uniqueness_check
 from logic.semantic import evaluate
 from tools.brute_force import count_solutions
 
 DATA = Path(__file__).resolve().parents[1] / "data"
+DEMO_EXPECTATIONS = {
+    "ambiguous.json": (STUCK, 256),
+    "inconsistent.json": (INCONSISTENT, 0),
+}
 
 
 def puzzle_digest(path: Path) -> str:
     """Hash file content with CRLF normalized to LF for portable checkouts."""
     return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def _evaluate_checked(clue: Clue, assignment: dict[str, bool], n: int) -> bool:
+    verdict = evaluate(clue, assignment, n)
+    if type(verdict) is not bool:
+        raise TypeError(f"Evaluator must return bool for {clue.id}, got {type(verdict).__name__}")
+    return verdict
 
 
 def semantic_count(clues: tuple[Clue, ...], n: int) -> int:
@@ -35,6 +47,9 @@ def semantic_count(clues: tuple[Clue, ...], n: int) -> int:
     for clue in clues:
         last = max(order[cell] for cell in clue_cells(clue, n))
         ready[last].append(clue)
+    smoke = dict.fromkeys(cells, False)
+    for clue in clues:
+        _evaluate_checked(clue, smoke, n)
     assignment: dict[str, bool] = {}
 
     def visit(index: int) -> int:
@@ -44,7 +59,7 @@ def semantic_count(clues: tuple[Clue, ...], n: int) -> int:
         total = 0
         for value in (False, True):
             assignment[cell] = value
-            if all(evaluate(clue, assignment, n) for clue in ready[index]):
+            if all(_evaluate_checked(clue, assignment, n) for clue in ready[index]):
                 total += visit(index + 1)
         del assignment[cell]
         return total
@@ -100,12 +115,14 @@ def audit_dataset(*, timeout: float = 10.0) -> dict:
     """Audit nine standard puzzles and two explicit intentional failure demos."""
     standard = sorted(DATA.glob("puzzles_*/*.json"))
     demos = sorted((DATA / "demo_cases").glob("*.json"))
+    unknown = sorted(path.name for path in demos if path.name not in DEMO_EXPECTATIONS)
+    if unknown:
+        raise ValueError(f"Missing demo expectation: {', '.join(unknown)}")
     rows = [audit_puzzle(path, timeout=timeout) for path in standard + demos]
-    expected = {"ambiguous.json": ("STUCK", 256), "inconsistent.json": ("INCONSISTENT", 0)}
     for row in rows:
         name = Path(row["path"]).name
         if row["path"].startswith("demo_cases/"):
-            status, count = expected[name]
+            status, count = DEMO_EXPECTATIONS[name]
             row["passes_expectation"] = (
                 row["agent_status"] == status and row["accepted_steps"] == 0
                 and row["clues_only"]["semantic_count_exact"] == count
@@ -113,7 +130,7 @@ def audit_dataset(*, timeout: float = 10.0) -> dict:
             )
         else:
             row["passes_expectation"] = (
-                row["agent_status"] == "SOLVED" and row["final_proved"] == row["n"] ** 2
+                row["agent_status"] == SOLVED and row["final_proved"] == row["n"] ** 2
                 and row["stored_labels_satisfy_all_clues"]
                 and row["clues_only"]["semantic_count_exact"] == 1
                 and row["clues_plus_initial_facts"]["semantic_count_exact"] == 1
@@ -121,7 +138,7 @@ def audit_dataset(*, timeout: float = 10.0) -> dict:
         row["passes_expectation"] &= all(
             row[key]["agreement"] for key in ("clues_only", "clues_plus_initial_facts")
         )
-    passed = len(standard) == 9 and len(demos) == 2 and all(
+    passed = len(standard) == 9 and {path.name for path in demos} == set(DEMO_EXPECTATIONS) and all(
         row["passes_expectation"] for row in rows
     )
     return {"standard_puzzles": len(standard), "intentional_demos": len(demos),
@@ -137,6 +154,7 @@ def main() -> int:
     report = audit_dataset(timeout=args.timeout)
     output = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     if args.out is not None:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
         with args.out.open("w", encoding="utf-8", newline="\n") as stream:
             stream.write(output)
     else:

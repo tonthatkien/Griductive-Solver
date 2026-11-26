@@ -86,3 +86,47 @@ python main.py --puzzle data/demo_cases/inconsistent.json
 Các lệnh GUI trên là hướng dẫn demo; kiểm chứng B6 đã chạy headless bằng engine thật.
 Baseline GUI gọi GameEngine.unsolved_cells() nhưng engine chưa có phương thức này;
 B6 không sửa luồng tích hợp đó, không khẳng định demo GUI đã chạy trực quan.
+
+## Số liệu tham khảo cho thực nghiệm (26/11/2026)
+
+Môi trường: Python 3.12.3, Linux-6.18.58.1-microsoft-standard-WSL2-x86_64-with-glibc2.39.
+Đo một lượt mỗi file bằng perf_counter; không warm-up hoặc lấy trung bình.
+Tập ràng buộc là toàn bộ clue, không thêm FACT face-up.
+DPLL đo toàn bộ lời gọi uniqueness_check (gồm validation/encode và tối đa hai solve);
+oracle đo count_solutions B2 cho 3×3/4×4 hoặc semantic_count cho 5×5.
+Không tính đọc JSON hoặc khởi tạo engine; kích thước KB lấy từ Encoder.build_kb
+trước blocking clause. Đây là số đo tham khảo trên máy chạy, không phải cam kết
+hiệu năng hay so sánh thuật toán trong điều kiện chi phí giống nhau.
+Thời gian không đưa vào JSON artifact để giữ kết quả audit tái lập ổn định.
+
+| Puzzle | Primary | Auxiliary | Clauses | E4 DPLL (ms) | Oracle semantic (ms) |
+|---|---:|---:|---:|---:|---:|
+| puzzles_3x3/p01.json | 9 | 0 | 28 | 0.881 | 3.028 |
+| puzzles_3x3/p02.json | 9 | 17 | 90 | 2.617 | 3.575 |
+| puzzles_3x3/p03.json | 9 | 18 | 106 | 3.809 | 4.845 |
+| puzzles_4x4/p01.json | 16 | 51 | 238 | 13.670 | 640.706 |
+| puzzles_4x4/p02.json | 16 | 63 | 306 | 43.910 | 570.882 |
+| puzzles_4x4/p03.json | 16 | 42 | 195 | 10.711 | 489.762 |
+| puzzles_5x5/p01.json | 25 | 163 | 777 | 139.244 | 64.298 |
+| puzzles_5x5/p02.json | 25 | 95 | 498 | 66.117 | 2.522 |
+| puzzles_5x5/p03.json | 25 | 204 | 813 | 198.515 | 98.810 |
+| demo_cases/ambiguous.json | 9 | 0 | 9 | 0.164 | 3.117 |
+| demo_cases/inconsistent.json | 9 | 0 | 9 | 0.093 | 1.262 |
+
+## Giới hạn demo và mở rộng dataset
+
+inconsistent.json chỉ dành cho minh họa phát hiện INCONSISTENT bằng Auto Solve
+(hoặc audit headless). Không dùng nó để demo nộp verdict thủ công:
+GameEngine.submit_verdict cố ý ném AssertionError nếu callback classify trả
+INCONSISTENT, vì engine yêu cầu mọi verdict nộp phải dựa trên KB nhất quán.
+Giới hạn tích hợp GUI đã nêu ở trên vẫn áp dụng.
+
+Hai fixture tối giản được giữ nguyên để có kết quả kiểm chứng rõ ràng.
+Nâng cấp nhân vật Conan, clue đa dạng hoặc demo giải vài bước rồi STUCK là
+công việc trình bày cho H5/H8; không thay đổi các fixture regression hiện tại.
+
+Nếu thêm demo mới, đăng ký trạng thái và số nghiệm kỳ vọng trong
+DEMO_EXPECTATIONS của tools/puzzle_check.py. File chưa đăng ký gây ValueError
+nêu tên file trước khi audit chạy; thiếu demo bắt buộc làm all_passed=false.
+semantic_count preflight mọi clue và yêu cầu evaluator trả đúng bool;
+lỗi evaluator được truyền ra kể cả khi nhánh đầu đã vô nghiệm.
