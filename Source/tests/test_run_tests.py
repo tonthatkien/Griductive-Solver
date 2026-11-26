@@ -1,4 +1,4 @@
-"""Kiểm thử G1 cho experiments/run_tests.py: CSV, trạng thái dừng, unique và tách SAT calls."""
+"""Kiểm thử cho experiments/run_tests.py: CSV, trạng thái dừng, unique và tách SAT calls."""
 from __future__ import annotations
 
 import csv
@@ -13,7 +13,7 @@ from unittest.mock import patch
 from engine.character import parse_character
 from engine.constants import CRIMINAL, INNOCENT, NOT_PROVABLE
 from engine.game_state import GameEngine, PublicKB
-from experiments.run_tests import FIELDNAMES, discover, main, run_one
+from experiments.run_tests import FIELDNAMES, _puzzle_clues, discover, main, run_one
 from logic.agent import LogicAgent, uniqueness_check
 from logic.dpll import DPLLSolver, SolveResult, SolverStats
 from tests.test_agent_loop import SnapshotEngine, ambiguous_puzzle, chain_puzzle, fact
@@ -104,10 +104,10 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(row["deduction_steps"], "8")
         sat_calls = int(row["sat_calls"])
         trace_calls = int(row["trace_sat_calls"])
-        verify_calls = int(row["verify_sat_calls"])
+        untraced_calls = int(row["untraced_sat_calls"])
         self.assertGreater(trace_calls, 0)
-        self.assertGreater(verify_calls, 0)
-        self.assertEqual(sat_calls, trace_calls + verify_calls)
+        self.assertGreater(untraced_calls, 0)
+        self.assertEqual(sat_calls, trace_calls + untraced_calls)
         self.assertGreaterEqual(float(row["runtime_sec"]), 0.0)
         for blank in ("primary_vars", "aux_vars", "clauses", "reveal_waves"):
             self.assertEqual(row[blank], "")
@@ -133,7 +133,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
             self.assertEqual(row["deduction_steps"], "0")
             self.assertEqual(row["sat_calls"], "1")
             self.assertEqual(row["trace_sat_calls"], "0")
-            self.assertEqual(row["verify_sat_calls"], "1")
+            self.assertEqual(row["untraced_sat_calls"], "1")
 
     def test_timeout_after_accepted_step_preserves_partial_progress(self) -> None:
         engine = GameEngine()
@@ -175,6 +175,8 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(rows[0]["status"], "STUCK")
         self.assertEqual(rows[0]["deduction_steps"], "0")
         self.assertGreater(int(rows[0]["sat_calls"]), 0)
+        self.assertEqual(rows[0]["trace_sat_calls"], "0")
+        self.assertEqual(rows[0]["untraced_sat_calls"], rows[0]["sat_calls"])
 
     def test_broken_json_writes_error_row_and_continues(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -276,7 +278,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         for col in (
             "sat_calls",
             "trace_sat_calls",
-            "verify_sat_calls",
+            "untraced_sat_calls",
             "decisions",
             "propagations",
             "backtracks",
@@ -298,6 +300,9 @@ class RunTestsStatusRowsTests(unittest.TestCase):
             unique_path = _write_json(root / "puzzles_3x3/p01_unique.json", chain_puzzle())
             _write_json(root / "puzzles_3x3/p02_multi.json", ambiguous_puzzle())
             _write_json(root / "puzzles_3x3/p03_unsat.json", unsat_data)
+            clues, _ = _puzzle_clues(unique_path)
+            self.assertEqual(len({c.id for c in clues}), len(clues))
+            self.assertIn("init_A1", [c.id for c in clues])
             out_csv = root / "results.csv"
             code, _, stderr = _run_cli(root, out_csv, "--timeout", "10")
             rows = _read_csv(out_csv)
@@ -316,7 +321,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         for row in rows:
             self.assertEqual(
                 int(row["sat_calls"]),
-                int(row["trace_sat_calls"]) + int(row["verify_sat_calls"]),
+                int(row["trace_sat_calls"]) + int(row["untraced_sat_calls"]),
             )
 
     def test_uniqueness_timeout_does_not_change_solve_status(self) -> None:
@@ -328,7 +333,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
 
         self.assertEqual(row["status"], "SOLVED")
         self.assertEqual(row["unique"], "TIMEOUT")
-        self.assertEqual(row["sat_calls"], row["trace_sat_calls"] + row["verify_sat_calls"])
+        self.assertEqual(row["sat_calls"], row["trace_sat_calls"] + row["untraced_sat_calls"])
 
     def test_uniqueness_excluded_from_sat_calls_and_split_matches_trace(self) -> None:
         puzzle_path = DATA_DIR / "puzzles_3x3/p01.json"
@@ -342,8 +347,8 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(row["unique"], "UNIQUE")
         self.assertEqual(row["sat_calls"], agent.sat_calls)
         self.assertEqual(row["trace_sat_calls"], 36)
-        self.assertEqual(row["verify_sat_calls"], 20)
-        self.assertEqual(row["sat_calls"], row["trace_sat_calls"] + row["verify_sat_calls"])
+        self.assertEqual(row["untraced_sat_calls"], 20)
+        self.assertEqual(row["sat_calls"], row["trace_sat_calls"] + row["untraced_sat_calls"])
 
 
 if __name__ == "__main__":

@@ -17,8 +17,9 @@ Cách đếm các cột kết quả:
   kiểm chứng của engine, lần kiểm tra KB cuối và truy vấn bị timeout.
 - `trace_sat_calls`: tổng `len(entry.sat_queries)` qua các bước `ACCEPTED`
   trong `agent.trace`.
-- `verify_sat_calls`: `sat_calls - trace_sat_calls` (truy vấn kiểm chứng của
-  engine, lượt quét cuối khi dừng và lượt quét dở trước khi timeout).
+- `untraced_sat_calls`: `sat_calls - trace_sat_calls` (các truy vấn ngoài
+  `agent.trace`: kiểm chứng của engine, lượt quét cuối khi dừng và lượt quét
+  dở trước khi timeout).
 - Các cột `primary_vars`, `aux_vars`, `clauses`, `reveal_waves` để trống.
 """
 from __future__ import annotations
@@ -37,7 +38,7 @@ if str(SOURCE_DIR) not in sys.path:
     sys.path.insert(0, str(SOURCE_DIR))
 
 from engine.character import parse_character  # noqa: E402
-from engine.clue import Clue, clue_from_dict  # noqa: E402
+from engine.clue import Clue  # noqa: E402
 from engine.constants import CRIMINAL, INNOCENT  # noqa: E402
 from engine.game_state import GameEngine  # noqa: E402
 from logic.agent import (  # noqa: E402
@@ -64,7 +65,7 @@ FIELDNAMES = (
     "clauses",
     "sat_calls",
     "trace_sat_calls",
-    "verify_sat_calls",
+    "untraced_sat_calls",
     "decisions",
     "propagations",
     "backtracks",
@@ -107,11 +108,15 @@ def _puzzle_clues(path: Path) -> tuple[list[Clue], int]:
         char, is_criminal, clue = parse_character(item, n)
         clues.append(clue)
         if char.cell in revealed:
-            clues.append(clue_from_dict(char.cell, {
-                "type": "FACT",
-                "target": char.cell,
-                "status": CRIMINAL if is_criminal else INNOCENT,
-            }))
+            clues.append(Clue(
+                id=f"init_{char.cell}",
+                owner=char.cell,
+                type="FACT",
+                params={
+                    "target": char.cell,
+                    "status": CRIMINAL if is_criminal else INNOCENT,
+                },
+            ))
     return clues, n
 
 
@@ -178,7 +183,7 @@ def run_one(
         "unique": unique,
         "sat_calls": agent.sat_calls,
         "trace_sat_calls": trace_sat_calls,
-        "verify_sat_calls": agent.sat_calls - trace_sat_calls,
+        "untraced_sat_calls": agent.sat_calls - trace_sat_calls,
         "decisions": agent.total_decisions,
         "propagations": agent.total_propagations,
         "backtracks": agent.total_backtracks,
