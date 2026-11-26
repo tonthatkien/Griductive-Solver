@@ -16,7 +16,6 @@ from typing import Callable, List, Literal, Protocol
 from engine import board
 from engine.constants import ACCEPTED, CRIMINAL, INCONSISTENT, INNOCENT, UNKNOWN
 from engine.clue import Clue
-from engine.constants import CRIMINAL, INCONSISTENT, INNOCENT, UNKNOWN
 from engine.game_state import PublicKB
 from logic.cnf_encoder import Encoder, KB
 from logic.dpll import DPLLSolver, SolveResult, SolverStats
