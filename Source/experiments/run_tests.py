@@ -30,7 +30,7 @@ Cách đếm các cột kết quả:
   `PublicKB` lúc dừng (lượt quét cuối, hoặc lúc timeout/lỗi); để trống nếu
   chưa có engine hoặc `build_kb` lỗi.
 - `deduction_steps`, `runtime_sec`: số bước `ACCEPTED` trong `agent.trace` và
-  thời gian nạp puzzle với chạy `auto_solve` (giây).
+  thời gian nạp puzzle và chạy `auto_solve` (giây).
 - `reveal_waves`: số lượt gom và nộp toàn bộ ô bị ép từ `PublicKB` hiện tại
   trong một lượt chạy riêng bằng `LogicAgent.classify`; không cộng vào
   `sat_calls`, các bộ đếm DPLL hay `runtime_sec`, và để trống khi truyền sẵn
