@@ -14,7 +14,8 @@ from engine.character import parse_character
 from engine.constants import CRIMINAL, INNOCENT, NOT_PROVABLE
 from engine.game_state import GameEngine, PublicKB
 from experiments.run_tests import FIELDNAMES, _puzzle_clues, discover, main, run_one
-from logic.agent import LogicAgent, _uniqueness_kb, uniqueness_check
+from logic.agent import LogicAgent, uniqueness_check
+from logic.cnf_encoder import Encoder
 from logic.dpll import DPLLSolver, SolveResult, SolverStats
 from tests.test_agent_loop import SnapshotEngine, ambiguous_puzzle, chain_puzzle, fact
 
@@ -181,6 +182,9 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(stderr, "")
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["status"], "STUCK")
+        self.assertEqual(rows[0]["primary_vars"], "9")
+        self.assertEqual(rows[0]["aux_vars"], "0")
+        self.assertEqual(rows[0]["clauses"], "2")
         self.assertEqual(rows[0]["deduction_steps"], "0")
         self.assertGreater(int(rows[0]["sat_calls"]), 0)
         self.assertEqual(rows[0]["trace_sat_calls"], "0")
@@ -238,6 +242,9 @@ class RunTestsStatusRowsTests(unittest.TestCase):
                 engine=SnapshotEngine(public, public, NOT_PROVABLE),
             )
         self.assertEqual(rejected["status"], "ERROR")
+        self.assertEqual(rejected["primary_vars"], 9)
+        self.assertEqual(rejected["aux_vars"], 0)
+        self.assertEqual(rejected["clauses"], 1)
         self.assertIn("ERROR puzzles_3x3/rejected.json: RuntimeError", stderr.getvalue())
 
         bad_data = chain_puzzle()
@@ -253,6 +260,9 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertIn("ERROR puzzles_3x3/bad_label.json: AssertionError", err)
         self.assertEqual(rows[0]["status"], "ERROR")
         self.assertEqual(rows[0]["size"], "3")
+        self.assertEqual(rows[0]["primary_vars"], "9")
+        self.assertEqual(rows[0]["aux_vars"], "0")
+        self.assertEqual(rows[0]["clauses"], "2")
 
     def test_unexpected_exception_writes_error_row_and_continues(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -383,19 +393,19 @@ class RunTestsStatusRowsTests(unittest.TestCase):
             (9, 0, 7),
         )
 
-    def test_solved_puzzles_match_uniqueness_kb_clauses_and_aux_vars(self) -> None:
+    def test_solved_puzzles_match_full_clue_kb_clauses_and_aux_vars(self) -> None:
         for folder in ("puzzles_3x3", "puzzles_4x4"):
             for puzzle_path in sorted((DATA_DIR / folder).glob("*.json")):
                 with self.subTest(puzzle=f"{folder}/{puzzle_path.name}"):
                     row = run_one(puzzle_path, timeout=10)
                     clues, n = _puzzle_clues(puzzle_path)
-                    ukb = _uniqueness_kb(clues, n)
+                    full_kb = Encoder(n).build_kb(PublicKB(n, tuple(clues)))
                     self.assertEqual(row["status"], "SOLVED")
-                    self.assertEqual(row["primary_vars"], ukb.num_primary)
-                    self.assertEqual(row["aux_vars"], ukb.num_aux)
+                    self.assertEqual(row["primary_vars"], full_kb.num_primary)
+                    self.assertEqual(row["aux_vars"], full_kb.num_aux)
                     self.assertEqual(
                         row["clauses"],
-                        ukb.num_clauses + int(row["deduction_steps"]),
+                        full_kb.num_clauses + int(row["deduction_steps"]),
                     )
 
     def test_kb_count_error_leaves_columns_blank_without_changing_status(self) -> None:

@@ -20,7 +20,10 @@ Cách đếm các cột kết quả:
 - `untraced_sat_calls`: `sat_calls - trace_sat_calls` (các truy vấn ngoài
   `agent.trace`: kiểm chứng của engine, lượt quét cuối khi dừng và lượt quét
   dở trước khi timeout).
-- Các cột `primary_vars`, `aux_vars`, `clauses`, `reveal_waves` để trống.
+- `primary_vars`, `aux_vars`, `clauses`: đếm bằng `Encoder.build_kb` trên
+  `PublicKB` lúc dừng (lượt quét cuối, hoặc lúc timeout/lỗi); để trống nếu
+  chưa có engine hoặc `build_kb` lỗi.
+- Cột `reveal_waves` để trống.
 """
 from __future__ import annotations
 
