@@ -11,6 +11,13 @@
 
 ## Chạy thực nghiệm
     python experiments/run_tests.py # ghi experiments/results.csv
+    python experiments/run_tests.py --data data --out experiments/results.csv --timeout 30
+
+Chạy từ thư mục `Source/`:
+- `--data`: thư mục chứa `puzzles_*/*.json` (mặc định `data`).
+- `--out`: đường dẫn file CSV kết quả (mặc định `experiments/results.csv`).
+- `--timeout`: giới hạn giây cho từng truy vấn DPLL và `uniqueness_check` (mặc định `30`); mỗi puzzle có thể gọi DPLL nhiều lần. Giá trị `0` dừng với `TIMEOUT` ở truy vấn đầu; truyền `--timeout inf` để bỏ giới hạn.
+- Cột `status` ghi `SOLVED`, `STUCK`, `INCONSISTENT`, `TIMEOUT` hoặc `ERROR`. Cột `unique` ghi `UNIQUE`, `MULTIPLE`, `UNSAT` hoặc `TIMEOUT`. Script ghi mọi dòng lỗi và hết giờ vào CSV rồi chạy tiếp các bài sau.
 
 ## Chạy test (chạy trong thư mục Source/)
     python -m unittest discover -s tests -t .
