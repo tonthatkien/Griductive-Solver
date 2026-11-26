@@ -1,0 +1,109 @@
+{
+  "n": 3,
+  "title": "B6 intentional inconsistent demo",
+  "characters": [
+    {
+      "cell": "A1",
+      "name": "Person 00",
+      "profession": "Demo",
+      "criminal": true,
+      "clue": {
+        "type": "FACT",
+        "target": "A1",
+        "status": "CRIMINAL"
+      }
+    },
+    {
+      "cell": "B1",
+      "name": "Person 01",
+      "profession": "Demo",
+      "criminal": true,
+      "clue": {
+        "type": "FACT",
+        "target": "A1",
+        "status": "INNOCENT"
+      }
+    },
+    {
+      "cell": "C1",
+      "name": "Person 02",
+      "profession": "Demo",
+      "criminal": true,
+      "clue": {
+        "type": "FACT",
+        "target": "A1",
+        "status": "CRIMINAL"
+      }
+    },
+    {
+      "cell": "A2",
+      "name": "Person 03",
+      "profession": "Demo",
+      "criminal": true,
+      "clue": {
+        "type": "FACT",
+        "target": "A1",
+        "status": "CRIMINAL"
+      }
+    },
+    {
+      "cell": "B2",
+      "name": "Person 04",
+      "profession": "Demo",
+      "criminal": true,
+      "clue": {
+        "type": "FACT",
+        "target": "A1",
+        "status": "CRIMINAL"
+      }
+    },
+    {
+      "cell": "C2",
+      "name": "Person 05",
+      "profession": "Demo",
+      "criminal": true,
+      "clue": {
+        "type": "FACT",
+        "target": "A1",
+        "status": "CRIMINAL"
+      }
+    },
+    {
+      "cell": "A3",
+      "name": "Person 06",
+      "profession": "Demo",
+      "criminal": true,
+      "clue": {
+        "type": "FACT",
+        "target": "A1",
+        "status": "CRIMINAL"
+      }
+    },
+    {
+      "cell": "B3",
+      "name": "Person 07",
+      "profession": "Demo",
+      "criminal": true,
+      "clue": {
+        "type": "FACT",
+        "target": "A1",
+        "status": "CRIMINAL"
+      }
+    },
+    {
+      "cell": "C3",
+      "name": "Person 08",
+      "profession": "Demo",
+      "criminal": true,
+      "clue": {
+        "type": "FACT",
+        "target": "A1",
+        "status": "CRIMINAL"
+      }
+    }
+  ],
+  "initially_revealed": [
+    "A1",
+    "B1"
+  ]
+}
