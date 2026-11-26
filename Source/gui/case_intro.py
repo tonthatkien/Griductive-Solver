@@ -102,17 +102,18 @@ class CaseIntro(QWidget):
 
         spread = 1.0 - _ease((ms - TEXT_IN_MS) / 900)        # chữ co khít dần lại
         title = f"{self._place}  ·  {self._time}"
+        family = theme.display(title)                          # Tektur cho chữ Việt (Cinzel thiếu glyph)
         px = min(h * 0.085, 66.0)
-        while px > 16 and QFontMetricsF(make_font(theme.FONT_TITLE, px, True, spacing=6)).horizontalAdvance(title) > w * 0.86:
+        while px > 16 and QFontMetricsF(make_font(family, px, True, spacing=6)).horizontalAdvance(title) > w * 0.86:
             px -= 1
         title_box = QRectF(0, h * 0.5 - px * 0.75, w, px * 1.5)
-        draw_neon_text(p, title_box, title, make_font(theme.FONT_TITLE, px, True, spacing=6 + 18 * spread),
+        draw_neon_text(p, title_box, title, make_font(family, px, True, spacing=6 + 18 * spread),
                        theme.GOLD_SOFT, theme.CYAN_LASER, 1.0, ALIGN_CENTER, alpha)
         kpx = max(12.0, h * 0.022)
         p.setFont(make_font(theme.FONT_MONO, kpx, True, spacing=5 + 10 * spread))
         p.setPen(QColor(127, 220, 255, alpha))
         p.drawText(QRectF(0, title_box.top() - kpx * 2.6, w, kpx * 2), ALIGN_CENTER, self._kicker)
-        full = QFontMetricsF(make_font(theme.FONT_TITLE, px, True, spacing=6)).horizontalAdvance(title)
+        full = QFontMetricsF(make_font(family, px, True, spacing=6)).horizontalAdvance(title)
         line = full * _ease((ms - TEXT_IN_MS - 150) / 700)    # vạch vàng nở ra từ giữa
         gold.setAlpha(int(200 * a))
         p.fillRect(QRectF((w - line) / 2, title_box.bottom() + 6, line, 2), gold)

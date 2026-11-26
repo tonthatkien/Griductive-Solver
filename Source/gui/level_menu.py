@@ -737,7 +737,7 @@ class LevelMenu(QWidget):
         p.setPen(accent.lighter(130))
         p.drawText(strip.adjusted(12, 0, -12, 0), ALIGN_LEFT_MID, f"CASE FILE // {lv.code}")
         draw_fitted(p, QRectF(card.left() + 14, card.top() + 32, cw - 28, 28), lv.title,
-                    theme.FONT_TITLE, 20, 11, theme.GOLD_SOFT, bold=True, fl=ALIGN_LEFT_MID)
+                    theme.display(lv.title), 20, 11, theme.GOLD_SOFT, bold=True, fl=ALIGN_LEFT_MID)
         draw_fitted(p, QRectF(card.left() + 14, card.top() + 60, cw - 28, 20), lv.place,
                     theme.FONT_DOSSIER, 13, 9, "#b9c6e6", italic=True, fl=ALIGN_LEFT_MID)
 
@@ -770,8 +770,8 @@ class LevelMenu(QWidget):
         blink = 0.55 + 0.45 * math.sin(t * 5)
         foot = QColor(theme.CYAN_LASER)
         foot.setAlpha(int(255 * blink))
-        p.setFont(make_font(theme.FONT_MONO, 12, True))
+        foot_text = "▶ HỒ SƠ LỖI, DÙNG ĐỂ DEMO" if lv.sealed else "▶ BẤM ĐỂ VÀO HIỆN TRƯỜNG"
+        p.setFont(make_font(theme.mono(foot_text), 12, True))      # Share Tech Mono thiếu Đ và dấu Việt
         p.setPen(foot)
-        p.drawText(QRectF(card.left() + 14, card.bottom() - 28, cw - 28, 20), ALIGN_LEFT_MID,
-                   "▶ HỒ SƠ LỖI, DÙNG ĐỂ DEMO" if lv.sealed else "▶ BẤM ĐỂ VÀO HIỆN TRƯỜNG")
+        p.drawText(QRectF(card.left() + 14, card.bottom() - 28, cw - 28, 20), ALIGN_LEFT_MID, foot_text)
         p.restore()

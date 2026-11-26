@@ -48,7 +48,7 @@ class HeaderChip(QWidget):
 
     def sizeHint(self) -> QSize:
         if self.kind == "hint":
-            fm = QFontMetricsF(make_font(theme.FONT_MONO, 12, True, spacing=1.6))
+            fm = QFontMetricsF(make_font(theme.mono(self.label), 12, True, spacing=1.6))
             return QSize(int(fm.horizontalAdvance(self.label.upper())) + 58, 36)
         lab = QFontMetricsF(make_font(theme.FONT_MONO, 10, True, spacing=1.4))
         val = QFontMetricsF(make_font(theme.FONT_GADGET, 20, True))
@@ -92,7 +92,7 @@ class HeaderChip(QWidget):
             p.setPen(NO_PEN)
             p.setBrush(accent)
             p.drawEllipse(c, 3.6, 3.6)
-            p.setFont(make_font(theme.FONT_MONO, 12, True, spacing=1.6))
+            p.setFont(make_font(theme.mono(self.label), 12, True, spacing=1.6))
             p.setPen(QColor("#bff6ff"))
             p.drawText(QRectF(r.left() + 32, r.top(), r.width() - 38, r.height()), ALIGN_LEFT_MID,
                        self.label.upper())

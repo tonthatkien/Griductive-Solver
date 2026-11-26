@@ -64,8 +64,16 @@ def init_fonts() -> Dict[str, str]:
 
 
 def display(text: str) -> str:
-    """Font game (Orbitron) nếu chuỗi chỉ gồm ASCII; có dấu tiếng Việt thì dùng font title."""
-    return FONT_DISPLAY if text.isascii() else FONT_TITLE
+    """Font game (Orbitron) nếu chuỗi chỉ gồm ASCII; có dấu tiếng Việt thì dùng Tektur (đủ glyph).
+
+    Cinzel và Orbitron không có đủ ký tự tiếng Việt (Ả, Ề, Ệ...), nên không dùng cho chuỗi có dấu.
+    """
+    return FONT_DISPLAY if text.isascii() else FONT_CLUE_TITLE
+
+
+def mono(text: str) -> str:
+    """Font mono (Share Tech Mono) nếu chuỗi chỉ gồm ASCII; có dấu tiếng Việt thì dùng Tektur (đủ glyph)."""
+    return FONT_MONO if text.isascii() else FONT_CLUE_TITLE
 
 
 def supports_vietnamese(family: str) -> bool:
