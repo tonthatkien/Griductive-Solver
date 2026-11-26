@@ -8,12 +8,15 @@ E3 ghi trace thật cho từng bước; E4/E5 triển khai ở task riêng.
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
+from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from typing import Callable, List, Literal, Protocol
 
 from engine import board
 from engine.constants import ACCEPTED, CRIMINAL, INCONSISTENT, INNOCENT, UNKNOWN
+from engine.clue import Clue
+from engine.constants import CRIMINAL, INCONSISTENT, INNOCENT, UNKNOWN
 from engine.game_state import PublicKB
 from logic.cnf_encoder import Encoder, KB
 from logic.dpll import DPLLSolver, SolveResult, SolverStats
@@ -225,5 +228,50 @@ class LogicAgent:
         return list(self.trace)
 
 
-def uniqueness_check(all_clues, n: int):
-    raise NotImplementedError
+def _uniqueness_kb(all_clues: Iterable[Clue], n: int) -> KB:
+    if type(n) is not int or not 1 <= n <= len(board.COLS):
+        raise ValueError("Kích thước lưới không hợp lệ")
+    if not isinstance(all_clues, Iterable) or isinstance(all_clues, (str, bytes, Mapping)):
+        raise ValueError("all_clues phải là iterable các Clue")
+    clues = deepcopy(tuple(all_clues))
+    if any(not isinstance(clue, Clue) or not isinstance(clue.params, dict) for clue in clues):
+        raise ValueError("Mỗi phần tử phải là Clue với params dạng dict")
+    return Encoder(n).build_kb(PublicKB(n, clues))
+
+
+def _primary_blocking_clause(model: Mapping[int, bool] | None, num_primary: int) -> list[int]:
+    if not isinstance(model, Mapping):
+        raise RuntimeError("DPLL trả SAT nhưng không có model hợp lệ")
+    blocking = []
+    for var in range(1, num_primary + 1):
+        value = model.get(var)
+        if type(value) is not bool:
+            raise RuntimeError(f"DPLL model thiếu hoặc sai kiểu biến primary {var}")
+        blocking.append(-var if value else var)
+    return blocking
+
+
+def uniqueness_check(
+    all_clues: Iterable[Clue], n: int, *, timeout: float | None = None
+) -> tuple[bool, int]:
+    """Kiểm tra duy nhất của tập clue bằng tối đa hai lần gọi DPLL.
+
+    Trả (False, 0) nếu UNSAT, (True, 1) nếu duy nhất, (False, 2) nếu có ít nhất
+    hai nghiệm primary. Số 2 là cận dưới, không phải số đếm exhaustive.
+    Chỉ dùng cho tooling; không đọc engine hay nhãn ẩn. Nếu cần trạng thái face-up
+    trong bài kiểm tra, caller thêm các FACT tương ứng vào all_clues một cách rõ ràng.
+    timeout áp dụng cho mỗi lần solve; hết thời gian thì ném TimeoutError.
+    Input được sao chép; encoder và solver dùng đúng hợp đồng hiện có.
+    """
+    kb = _uniqueness_kb(all_clues, n)
+    solver = DPLLSolver()
+    first = solver.solve(kb.clauses, kb.num_vars, timeout=timeout)
+    if first.timed_out:
+        raise TimeoutError("DPLL quá thời gian khi tìm nghiệm đầu tiên")
+    if not first.sat:
+        return False, 0
+    blocking = _primary_blocking_clause(first.model, kb.num_primary)
+    second = solver.solve(kb.clauses + [blocking], kb.num_vars, timeout=timeout)
+    if second.timed_out:
+        raise TimeoutError("DPLL quá thời gian khi tìm nghiệm primary thứ hai")
+    return (False, 2) if second.sat else (True, 1)
