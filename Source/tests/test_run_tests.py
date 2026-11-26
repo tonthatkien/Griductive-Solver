@@ -1,4 +1,4 @@
-"""Kiểm thử G1 cho experiments/run_tests.py: CSV, TIMEOUT, STUCK, INCONSISTENT và ERROR."""
+"""Kiểm thử G1 cho experiments/run_tests.py: CSV, trạng thái dừng, unique và tách SAT calls."""
 from __future__ import annotations
 
 import csv
@@ -10,11 +10,15 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+from engine.character import parse_character
 from engine.constants import CRIMINAL, INNOCENT, NOT_PROVABLE
 from engine.game_state import GameEngine, PublicKB
 from experiments.run_tests import FIELDNAMES, discover, main, run_one
+from logic.agent import LogicAgent, uniqueness_check
 from logic.dpll import DPLLSolver, SolveResult, SolverStats
 from tests.test_agent_loop import SnapshotEngine, ambiguous_puzzle, chain_puzzle, fact
+
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 
 def _write_json(path: Path, data: object) -> Path:
@@ -96,10 +100,16 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(row["puzzle"], "puzzles_3x3/p01.json")
         self.assertEqual(row["size"], "3")
         self.assertEqual(row["status"], "SOLVED")
+        self.assertEqual(row["unique"], "UNIQUE")
         self.assertEqual(row["deduction_steps"], "8")
-        self.assertGreater(int(row["sat_calls"]), 0)
+        sat_calls = int(row["sat_calls"])
+        trace_calls = int(row["trace_sat_calls"])
+        verify_calls = int(row["verify_sat_calls"])
+        self.assertGreater(trace_calls, 0)
+        self.assertGreater(verify_calls, 0)
+        self.assertEqual(sat_calls, trace_calls + verify_calls)
         self.assertGreaterEqual(float(row["runtime_sec"]), 0.0)
-        for blank in ("unique", "primary_vars", "aux_vars", "clauses", "reveal_waves"):
+        for blank in ("primary_vars", "aux_vars", "clauses", "reveal_waves"):
             self.assertEqual(row[blank], "")
 
     def test_timeout_zero_writes_timeout_rows_for_all_puzzles(self) -> None:
@@ -119,8 +129,11 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         ])
         for row in rows:
             self.assertEqual(row["status"], "TIMEOUT")
+            self.assertEqual(row["unique"], "TIMEOUT")
             self.assertEqual(row["deduction_steps"], "0")
             self.assertEqual(row["sat_calls"], "1")
+            self.assertEqual(row["trace_sat_calls"], "0")
+            self.assertEqual(row["verify_sat_calls"], "1")
 
     def test_timeout_after_accepted_step_preserves_partial_progress(self) -> None:
         engine = GameEngine()
@@ -260,8 +273,77 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(stderr, "")
         self.assertEqual(len(rows), 2)
-        for col in ("sat_calls", "decisions", "propagations", "backtracks", "deduction_steps"):
+        for col in (
+            "sat_calls",
+            "trace_sat_calls",
+            "verify_sat_calls",
+            "decisions",
+            "propagations",
+            "backtracks",
+            "deduction_steps",
+        ):
             self.assertEqual(rows[0][col], rows[1][col])
+
+    def test_uniqueness_outcomes_and_initial_fact_inclusion(self) -> None:
+        unsat_data = chain_puzzle()
+        unsat_data["characters"][0]["clue"] = {
+            "type": "FACT", "target": "A1", "status": INNOCENT
+        }
+        # Thiếu FACT cho initially_revealed (A1) thì chain_puzzle có ít nhất 2 nghiệm.
+        clues_no_init = [parse_character(c, 3)[2] for c in chain_puzzle()["characters"]]
+        self.assertEqual(uniqueness_check(clues_no_init, 3), (False, 2))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            unique_path = _write_json(root / "puzzles_3x3/p01_unique.json", chain_puzzle())
+            _write_json(root / "puzzles_3x3/p02_multi.json", ambiguous_puzzle())
+            _write_json(root / "puzzles_3x3/p03_unsat.json", unsat_data)
+            out_csv = root / "results.csv"
+            code, _, stderr = _run_cli(root, out_csv, "--timeout", "10")
+            rows = _read_csv(out_csv)
+            self.assertEqual(run_one(unique_path, timeout=10)["unique"], "UNIQUE")
+
+        self.assertEqual(code, 0)
+        self.assertEqual(stderr, "")
+        self.assertEqual(
+            [(r["puzzle"], r["status"], r["unique"]) for r in rows],
+            [
+                ("puzzles_3x3/p01_unique.json", "SOLVED", "UNIQUE"),
+                ("puzzles_3x3/p02_multi.json", "STUCK", "MULTIPLE"),
+                ("puzzles_3x3/p03_unsat.json", "INCONSISTENT", "UNSAT"),
+            ],
+        )
+        for row in rows:
+            self.assertEqual(
+                int(row["sat_calls"]),
+                int(row["trace_sat_calls"]) + int(row["verify_sat_calls"]),
+            )
+
+    def test_uniqueness_timeout_does_not_change_solve_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            puzzle_path = _write_json(root / "puzzles_3x3/p01.json", chain_puzzle())
+            with patch("experiments.run_tests.uniqueness_check", side_effect=TimeoutError):
+                row = run_one(puzzle_path, timeout=10)
+
+        self.assertEqual(row["status"], "SOLVED")
+        self.assertEqual(row["unique"], "TIMEOUT")
+        self.assertEqual(row["sat_calls"], row["trace_sat_calls"] + row["verify_sat_calls"])
+
+    def test_uniqueness_excluded_from_sat_calls_and_split_matches_trace(self) -> None:
+        puzzle_path = DATA_DIR / "puzzles_3x3/p01.json"
+        engine = GameEngine()
+        engine.load_puzzle(puzzle_path)
+        agent = LogicAgent(timeout=10)
+        agent.auto_solve(engine)
+
+        row = run_one(puzzle_path, timeout=10)
+        self.assertEqual(row["status"], "SOLVED")
+        self.assertEqual(row["unique"], "UNIQUE")
+        self.assertEqual(row["sat_calls"], agent.sat_calls)
+        self.assertEqual(row["trace_sat_calls"], 36)
+        self.assertEqual(row["verify_sat_calls"], 20)
+        self.assertEqual(row["sat_calls"], row["trace_sat_calls"] + row["verify_sat_calls"])
 
 
 if __name__ == "__main__":

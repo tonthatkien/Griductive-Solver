@@ -6,15 +6,26 @@ Chạy từ thư mục Source/:
 Tham số `--timeout` giới hạn thời gian (giây) cho từng truy vấn DPLL; mỗi bài
 có thể gọi DPLL nhiều lần. Cột `status` ghi một trong năm giá trị: `SOLVED`,
 `STUCK`, `INCONSISTENT`, `TIMEOUT`, `ERROR`. Khi một bài gặp lỗi hoặc hết giờ,
-script ghi dòng kết quả đó rồi chạy tiếp các bài sau. Trên dòng `TIMEOUT`,
-`sat_calls` và các bộ đếm DPLL vẫn tính cả truy vấn bị timeout. Các cột chưa
-thu thập (`unique`, `primary_vars`, `aux_vars`, `clauses`, `reveal_waves`) giữ
-giá trị rỗng.
+script ghi dòng kết quả đó rồi chạy tiếp các bài sau.
+
+Cách đếm các cột kết quả:
+- `unique`: kiểm tra bằng `uniqueness_check` trên toàn bộ clue của file JSON
+  kèm `FACT` cho các ô `initially_revealed`, ghi `UNIQUE`, `MULTIPLE`, `UNSAT`
+  hoặc `TIMEOUT` (hết giờ ở bước này không đổi `status`). Bước này chạy tách
+  biệt, không cộng vào `sat_calls` và `runtime_sec`.
+- `sat_calls`: tổng số lần `LogicAgent` gọi `DPLLSolver.solve`, gồm truy vấn
+  kiểm chứng của engine, lần kiểm tra KB cuối và truy vấn bị timeout.
+- `trace_sat_calls`: tổng `len(entry.sat_queries)` qua các bước `ACCEPTED`
+  trong `agent.trace`.
+- `verify_sat_calls`: `sat_calls - trace_sat_calls` (truy vấn kiểm chứng của
+  engine, lượt quét cuối khi dừng và lượt quét dở trước khi timeout).
+- Các cột `primary_vars`, `aux_vars`, `clauses`, `reveal_waves` để trống.
 """
 from __future__ import annotations
 
 import argparse
 import csv
+import json
 import math
 import sys
 import time
@@ -25,13 +36,23 @@ SOURCE_DIR = Path(__file__).resolve().parent.parent
 if str(SOURCE_DIR) not in sys.path:
     sys.path.insert(0, str(SOURCE_DIR))
 
+from engine.character import parse_character  # noqa: E402
+from engine.clue import Clue, clue_from_dict  # noqa: E402
+from engine.constants import CRIMINAL, INNOCENT  # noqa: E402
 from engine.game_state import GameEngine  # noqa: E402
-from logic.agent import LogicAgent, RevealEngine, TIMEOUT  # noqa: E402
+from logic.agent import (  # noqa: E402
+    LogicAgent,
+    RevealEngine,
+    TIMEOUT,
+    UNSAT,
+    uniqueness_check,
+)
 
 DEFAULT_DATA_DIR = SOURCE_DIR / "data"
 DEFAULT_OUT_PATH = SOURCE_DIR / "experiments" / "results.csv"
 DEFAULT_TIMEOUT = 30.0
 ERROR = "ERROR"
+UNIQUE, MULTIPLE = "UNIQUE", "MULTIPLE"
 
 FIELDNAMES = (
     "puzzle",
@@ -42,6 +63,8 @@ FIELDNAMES = (
     "aux_vars",
     "clauses",
     "sat_calls",
+    "trace_sat_calls",
+    "verify_sat_calls",
     "decisions",
     "propagations",
     "backtracks",
@@ -75,6 +98,39 @@ def _parse_timeout(raw: str) -> float:
     return value
 
 
+def _puzzle_clues(path: Path) -> tuple[list[Clue], int]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    n = data["n"]
+    revealed = set(data["initially_revealed"])
+    clues: list[Clue] = []
+    for item in data["characters"]:
+        char, is_criminal, clue = parse_character(item, n)
+        clues.append(clue)
+        if char.cell in revealed:
+            clues.append(clue_from_dict(char.cell, {
+                "type": "FACT",
+                "target": char.cell,
+                "status": CRIMINAL if is_criminal else INNOCENT,
+            }))
+    return clues, n
+
+
+def _check_uniqueness(path: Path, timeout: float | None) -> str:
+    try:
+        clues, n = _puzzle_clues(path)
+        is_unique, count = uniqueness_check(clues, n, timeout=timeout)
+    except TimeoutError:
+        return TIMEOUT
+    except Exception as exc:
+        detail = f": {exc}" if str(exc) else ""
+        puzzle_name = f"{path.parent.name}/{path.name}"
+        print(f"ERROR {puzzle_name} (unique): {type(exc).__name__}{detail}", file=sys.stderr)
+        return ERROR
+    if is_unique:
+        return UNIQUE
+    return UNSAT if count == 0 else MULTIPLE
+
+
 def run_one(
     path: Path | str,
     timeout: float | None = DEFAULT_TIMEOUT,
@@ -93,6 +149,7 @@ def run_one(
 
     puzzle_path = Path(path)
     puzzle_name = f"{puzzle_path.parent.name}/{puzzle_path.name}"
+    check_unique = False
     size: int | str = ""
     status = ERROR
     start = time.perf_counter()
@@ -101,6 +158,7 @@ def run_one(
             loaded = GameEngine()
             loaded.load_puzzle(puzzle_path)
             engine = loaded
+            check_unique = True
         size = engine.get_public_kb().n
         agent.auto_solve(engine)
         status = agent.solve_status or ""
@@ -109,16 +167,23 @@ def run_one(
     except Exception as exc:
         detail = f": {exc}" if str(exc) else ""
         print(f"ERROR {puzzle_name}: {type(exc).__name__}{detail}", file=sys.stderr)
+    runtime_sec = round(time.perf_counter() - start, 6)
+
+    unique = _check_uniqueness(puzzle_path, timeout) if check_unique else ""
+    trace_sat_calls = sum(len(entry.sat_queries) for entry in agent.trace)
     return {
         "puzzle": puzzle_name,
         "size": size,
         "status": status,
+        "unique": unique,
         "sat_calls": agent.sat_calls,
+        "trace_sat_calls": trace_sat_calls,
+        "verify_sat_calls": agent.sat_calls - trace_sat_calls,
         "decisions": agent.total_decisions,
         "propagations": agent.total_propagations,
         "backtracks": agent.total_backtracks,
         "deduction_steps": len(agent.trace),
-        "runtime_sec": round(time.perf_counter() - start, 6),
+        "runtime_sec": runtime_sec,
     }
 
 
@@ -154,7 +219,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             row = run_one(path, args.timeout)
             writer.writerow(row)
             print(
-                f"{row['puzzle']} | {row['status']} | "
+                f"{row['puzzle']} | {row['status']} | unique={row['unique'] or '-'} | "
                 f"steps={row['deduction_steps']} sat={row['sat_calls']} "
                 f"time={row['runtime_sec']:.3f}s"
             )
