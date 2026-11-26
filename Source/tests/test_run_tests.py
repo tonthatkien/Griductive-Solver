@@ -343,11 +343,12 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         agent.auto_solve(engine)
 
         row = run_one(puzzle_path, timeout=10)
+        expected_trace = sum(len(entry.sat_queries) for entry in agent.trace)
         self.assertEqual(row["status"], "SOLVED")
         self.assertEqual(row["unique"], "UNIQUE")
         self.assertEqual(row["sat_calls"], agent.sat_calls)
-        self.assertEqual(row["trace_sat_calls"], 36)
-        self.assertEqual(row["untraced_sat_calls"], 20)
+        self.assertEqual(row["trace_sat_calls"], expected_trace)
+        self.assertEqual(row["untraced_sat_calls"], agent.sat_calls - expected_trace)
         self.assertEqual(row["sat_calls"], row["trace_sat_calls"] + row["untraced_sat_calls"])
 
 
