@@ -1,18 +1,21 @@
 """B6: independent counting, standard corpus and intentional failure demos."""
 
+import hashlib
+import io
 import json
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from engine import board
-from engine.clue import clue_from_dict
+from engine.clue import Clue, clue_from_dict
 from engine.constants import CRIMINAL, INNOCENT
 from tools.brute_force import count_solutions
-from tools.puzzle_check import DATA, audit_dataset, semantic_count
+from tools.puzzle_check import DATA, audit_dataset, main, puzzle_digest, semantic_count
 
 
-def fact(cell: str, status: str = CRIMINAL):
+def fact(cell: str, status: str = CRIMINAL) -> Clue:
     """Build an independent primary fact for reference enumeration."""
     return clue_from_dict(cell, {"type": "FACT", "target": cell, "status": status})
 
@@ -90,14 +93,62 @@ class DatasetAuditTests(unittest.TestCase):
             self.assertEqual(row["initial_proved"], row["final_proved"])
             self.assertEqual(row["clues_only"]["semantic_count_exact"], count)
 
-    def test_report_matches_checked_in_artifact_and_content_hashes(self) -> None:
-        import hashlib
-        artifact = DATA.parents[1] / "docs" / "puzzle_check_results.json"
-        self.assertEqual(self.report, json.loads(artifact.read_text()))
+    def test_report_structure_and_normalized_content_hashes(self) -> None:
         self.assertTrue(self.report["all_passed"])
+        self.assertEqual(self.report["standard_puzzles"], 9)
+        self.assertEqual(self.report["intentional_demos"], 2)
+        self.assertEqual(len(self.report["results"]), 11)
         for row in self.report["results"]:
-            self.assertEqual(row["sha256"],
-                             hashlib.sha256((DATA / row["path"]).read_bytes()).hexdigest())
+            content = (DATA / row["path"]).read_bytes().replace(b"\r\n", b"\n")
+            self.assertEqual(row["sha256"], hashlib.sha256(content).hexdigest())
+        self.assertEqual(json.loads(json.dumps(self.report)), self.report)
+
+
+class PortableReportTests(unittest.TestCase):
+    """Exercise newline normalization and CLI encoding without repository docs."""
+
+    def test_digest_ignores_only_crlf_conversion_not_content_changes(self) -> None:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "puzzle.json"
+            lf = '{"title": "Vụ án"}\n'.encode("utf-8")
+            path.write_bytes(lf)
+            expected = puzzle_digest(path)
+            path.write_bytes(lf.replace(b"\n", b"\r\n"))
+            self.assertEqual(puzzle_digest(path), expected)
+            path.write_bytes(lf.replace(b"title", b"other"))
+            self.assertNotEqual(puzzle_digest(path), expected)
+
+    def test_out_writes_utf8_without_bom_or_crlf(self) -> None:
+        report = {"all_passed": True, "title": "Vụ án"}
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "result.json"
+            with patch("sys.argv", ["puzzle_check", "--out", str(output)]), \
+                    patch("tools.puzzle_check.audit_dataset", return_value=report), \
+                    patch("sys.stdout", new_callable=io.StringIO) as stdout:
+                self.assertEqual(main(), 0)
+                self.assertEqual(stdout.getvalue(), "")
+            raw = output.read_bytes()
+            self.assertFalse(raw.startswith(b"\xef\xbb\xbf"))
+            self.assertNotIn(b"\r\n", raw)
+            self.assertTrue(raw.endswith(b"\n"))
+            self.assertEqual(json.loads(raw.decode("utf-8")), report)
+
+    def test_failed_audit_still_writes_report_and_returns_nonzero(self) -> None:
+        report = {"all_passed": False}
+        with TemporaryDirectory() as directory:
+            output = Path(directory) / "result.json"
+            with patch("sys.argv", ["puzzle_check", "--out", str(output)]), \
+                    patch("tools.puzzle_check.audit_dataset", return_value=report):
+                self.assertEqual(main(), 1)
+            self.assertEqual(json.loads(output.read_text(encoding="utf-8")), report)
+
+    def test_default_stdout_remains_json(self) -> None:
+        report = {"all_passed": True}
+        with patch("sys.argv", ["puzzle_check"]), \
+                patch("tools.puzzle_check.audit_dataset", return_value=report), \
+                patch("sys.stdout", new_callable=io.StringIO) as stdout:
+            self.assertEqual(main(), 0)
+            self.assertEqual(json.loads(stdout.getvalue()), report)
 
 
 if __name__ == "__main__":

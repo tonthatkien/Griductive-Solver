@@ -17,6 +17,11 @@ from tools.brute_force import count_solutions
 DATA = Path(__file__).resolve().parents[1] / "data"
 
 
+def puzzle_digest(path: Path) -> str:
+    """Hash file content with CRLF normalized to LF for portable checkouts."""
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
 def semantic_count(clues: tuple[Clue, ...], n: int) -> int:
     """Count exactly by Boolean enumeration; prune only fully evaluated false clues.
 
@@ -82,7 +87,7 @@ def audit_puzzle(path: Path, *, timeout: float = 10.0) -> dict:
     entries = agent.auto_solve(engine)
     return {
         "path": path.relative_to(DATA).as_posix(), "n": n,
-        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "sha256": puzzle_digest(path),
         "clues_only": pure, "clues_plus_initial_facts": with_initial,
         "stored_labels_satisfy_all_clues": labels_satisfy,
         "agent_status": agent.solve_status, "accepted_steps": len(entries),
@@ -127,9 +132,15 @@ def main() -> int:
     """Print reproducible JSON; nonzero exit on a mismatched expected result."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--timeout", type=float, default=10.0)
+    parser.add_argument("--out", type=Path, help="Write UTF-8 JSON with LF newlines")
     args = parser.parse_args()
     report = audit_dataset(timeout=args.timeout)
-    print(json.dumps(report, ensure_ascii=False, indent=2))
+    output = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
+    if args.out is not None:
+        with args.out.open("w", encoding="utf-8", newline="\n") as stream:
+            stream.write(output)
+    else:
+        print(output, end="")
     return 0 if report["all_passed"] else 1
 
 

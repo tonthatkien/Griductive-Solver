@@ -8,14 +8,20 @@ Dữ liệu gốc của chín puzzle chuẩn được giữ nguyên.
 
 Chạy từ Source/ (Python 3.10+, không cần thư viện SAT ngoài):
 ```bash
-python3 -m tools.puzzle_check > ../docs/puzzle_check_results.json
-python3 -m unittest tests.test_puzzle_check -v
-python3 -m unittest discover -s tests -t .
+python -m tools.puzzle_check --out ../docs/puzzle_check_results.json
+python -m unittest tests.test_puzzle_check -v
+python -m unittest discover -s tests -t .
 ```
+
+Trên Linux/macOS có thể dùng python3 thay python. --out ghi trực tiếp UTF-8 không BOM,
+xuống dòng LF, không phụ thuộc encoding chuyển hướng của PowerShell. Khi chỉ có
+Source/ trong gói nộp bài, có thể dùng --out puzzle_check_results.json; unit test
+không cần thư mục docs/.
 
 Lệnh audit trả exit code 0 chỉ khi đủ 9 puzzle chuẩn, 2 demo và mọi kết quả
 khớp kỳ vọng. Timeout DPLL hoặc lỗi evaluator được truyền thành lỗi; không coi là UNSAT.
-JSON đi kèm ghi SHA-256 từng puzzle, số nghiệm chính xác của oracle, kết quả DPLL
+JSON đi kèm ghi SHA-256 từng puzzle sau khi chuẩn hóa CRLF thành LF,
+số nghiệm chính xác của oracle, kết quả DPLL
 và tiến độ agent. Không ghi thời gian vào artifact để kết quả tái lập ổn định.
 
 ## Kết quả thực tế
@@ -74,8 +80,8 @@ nhầm là puzzle chuẩn phải UNIQUE/SOLVED. Chúng hợp lệ về schema nh
 
 Có thể nạp JSON demo qua GUI sau khi luồng engine/GUI hoàn thiện:
 ```bash
-python3 main.py --puzzle data/demo_cases/ambiguous.json
-python3 main.py --puzzle data/demo_cases/inconsistent.json
+python main.py --puzzle data/demo_cases/ambiguous.json
+python main.py --puzzle data/demo_cases/inconsistent.json
 ```
 Các lệnh GUI trên là hướng dẫn demo; kiểm chứng B6 đã chạy headless bằng engine thật.
 Baseline GUI gọi GameEngine.unsolved_cells() nhưng engine chưa có phương thức này;
