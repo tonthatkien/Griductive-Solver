@@ -1,4 +1,4 @@
-"""Test C6: Encoder.build_kb = CNF(clue đã lật) ∧ unit clause của ô đã chứng minh."""
+"""Test Encoder.build_kb = CNF(clue đã lật) ∧ unit clause của ô đã chứng minh."""
 import json
 import random
 import unittest
@@ -73,7 +73,7 @@ class TestBuildKbContent(unittest.TestCase):
         kb = Encoder(N).build_kb(PublicKB(N, proved={"C3": CRIMINAL, "A1": INNOCENT}))
         self.assertEqual(kb.clauses, [[-1], [9]])
 
-    def test_only_public_data_is_encoded(self):
+    def test_unit_clauses_only_cover_public_cells(self):
         public = p01_public_kb()
         kb = Encoder(N).build_kb(public)
         unit_vars = {abs(c[0]) for c in kb.clauses if len(c) == 1}
@@ -132,6 +132,13 @@ class TestBuildKbInvalidInput(unittest.TestCase):
         with self.assertRaises(ValueError):
             Encoder(N).build_kb(PublicKB(N, revealed_clues=[bad]))
 
+    def test_invalid_verdict_fails_before_any_encoding(self):
+        enc = Encoder(N)
+        public = PublicKB(N, revealed_clues=[parity_clue("A1")], proved={"A1": UNKNOWN})
+        with self.assertRaises(ValueError):
+            enc.build_kb(public)
+        self.assertEqual(enc.num_aux, 0)
+
 
 class TestBuildKbWithDpll(unittest.TestCase):
     """Tích hợp nhẹ: KB của p01 lúc đầu suy ra đúng đợt đầu (B2, C2, C3), A3 chưa."""
@@ -159,7 +166,7 @@ class TestBuildKbWithDpll(unittest.TestCase):
 
 
 class TestBuildKbFullPuzzle(unittest.TestCase):
-    """Dùng TOÀN BỘ clue của p01 (chỉ trong test, agent không bao giờ làm vậy).
+    """Dùng toàn bộ clue của p01 (chỉ trong test, agent không bao giờ làm vậy).
 
     p01 là puzzle có nghiệm duy nhất, nên KB dựng từ toàn bộ clue của nó phải có
     đúng một model trên biến primary, và model đó khớp nhãn ẩn. Đây là kiểm tra
