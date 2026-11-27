@@ -16,10 +16,10 @@
 Chạy từ thư mục `Source/`:
 - `--data`: thư mục chứa `puzzles_*/*.json` (mặc định `data`).
 - `--out`: đường dẫn file CSV kết quả (mặc định `experiments/results.csv`).
-- `--timeout`: giới hạn giây cho từng truy vấn DPLL, kể cả trong `uniqueness_check` và lượt đếm `reveal_waves` (mặc định `30`); mỗi puzzle có thể gọi DPLL nhiều lần. Giá trị `0` dừng với `TIMEOUT` ở truy vấn đầu; truyền `--timeout inf` để bỏ giới hạn.
-- Cột `status` ghi `SOLVED`, `STUCK`, `INCONSISTENT`, `TIMEOUT` hoặc `ERROR`. Cột `unique` ghi `UNIQUE`, `MULTIPLE`, `UNSAT` hoặc `TIMEOUT`. Script ghi mọi dòng lỗi và hết giờ vào CSV rồi chạy tiếp các bài sau.
+- `--timeout`: giới hạn giây cho từng truy vấn DPLL, kể cả trong `uniqueness_check` (mặc định `30`); mỗi puzzle có thể gọi DPLL nhiều lần. Giá trị `0` dừng với `TIMEOUT` ở truy vấn đầu; truyền `--timeout inf` để bỏ giới hạn.
+- Cột `status` ghi `SOLVED`, `STUCK`, `INCONSISTENT`, `TIMEOUT` hoặc `ERROR`. Cột `unique` ghi `UNIQUE`, `MULTIPLE`, `UNSAT`, `TIMEOUT` hoặc `ERROR`. Script ghi mọi dòng lỗi và hết giờ vào CSV rồi chạy tiếp các bài sau.
 
-File `experiments/results.csv` gồm 16 cột: `puzzle`, `size`, `status`, `unique`, `primary_vars`, `aux_vars`, `clauses`, `sat_calls`, `trace_sat_calls`, `untraced_sat_calls`, `decisions`, `propagations`, `backtracks`, `deduction_steps`, `reveal_waves`, `runtime_sec`. Ba cột `primary_vars`, `aux_vars`, `clauses` đo từ `PublicKB` lúc agent dừng; `decisions`, `propagations`, `backtracks` cộng từ `SolverStats` qua mọi truy vấn trong `sat_calls`. Hai lượt kiểm tra `unique` và đếm `reveal_waves` chạy tách riêng nên không tính vào `sat_calls`, các bộ đếm DPLL hay `runtime_sec`. Chạy cả 9 bài mất khoảng 1 phút; ba bài `5x5` chiếm phần lớn thời gian.
+File `experiments/results.csv` gồm 15 cột: `puzzle`, `size`, `status`, `unique`, `primary_vars`, `aux_vars`, `clauses`, `sat_calls`, `trace_sat_calls`, `untraced_sat_calls`, `decisions`, `propagations`, `backtracks`, `deduction_steps`, `runtime_sec`. Ba cột `primary_vars`, `aux_vars`, `clauses` là kích thước KB của cả puzzle (mọi clue kèm `FACT` cho ô lật sẵn, cùng tập clue với `uniqueness_check`), nên dòng `STUCK`/`TIMEOUT` có cùng số với dòng `SOLVED` của bài đó. `decisions`, `propagations`, `backtracks` cộng từ `SolverStats` qua mọi truy vấn trong `sat_calls`. `deduction_steps` là số bước `ACCEPTED`; mỗi bước lật một clue nên cột này cũng là số lượt lật thẻ. Lượt kiểm tra `unique` chạy riêng nên không tính vào `sat_calls`, các bộ đếm DPLL hay `runtime_sec`.
 
 ## Chạy test (chạy trong thư mục Source/)
     python -m unittest discover -s tests -t .
