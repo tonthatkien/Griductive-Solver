@@ -17,6 +17,7 @@ from typing import List
 
 SEALED_PREFIX = "bad_"
 SEALED_PLACE = "Hiện trường bị phong tỏa"
+TRACK_COUNT = 9            # số bài nhạc nền theo màn: level_01 ... level_09 (quá 9 màn thì quay vòng)
 PLACES = (
     "Quán cà phê góc phố", "Biệt thự bỏ hoang", "Phòng thí nghiệm", "Ga tàu điện",
     "Bảo tàng nghệ thuật", "Khách sạn trung tâm", "Công viên ven sông", "Thư viện cổ",
@@ -36,6 +37,7 @@ class Level:
     title: str        # "Vụ án #01" hoặc "Hồ sơ niêm phong"
     place: str        # tên địa điểm trên bản đồ
     sealed: bool
+    track: int = 0    # bài nhạc nền 1..TRACK_COUNT của màn thường; 0 = màn niêm phong (dùng nhạc menu)
 
     @property
     def code(self) -> str:
@@ -79,11 +81,13 @@ def discover_levels(data_dir: Path) -> List[Level]:
         counters[(n, sealed)] = counters.get((n, sealed), 0) + 1
         digits = re.search(r"\d+", path.stem)
         number = int(digits.group()) if digits and not sealed else counters[(n, sealed)]
+        track = 0
         if sealed:
             title, place = "Hồ sơ niêm phong", SEALED_PLACE
         else:
             title, place = f"Vụ án #{number:02d}", PLACES[normal_seen % len(PLACES)]
+            track = normal_seen % TRACK_COUNT + 1
             normal_seen += 1
         levels.append(Level(path.relative_to(data_dir).as_posix(), path, n, number,
-                            title, place, sealed))
+                            title, place, sealed, track))
     return levels

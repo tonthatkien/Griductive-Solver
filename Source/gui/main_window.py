@@ -68,12 +68,17 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, StageMixin, AutoMixin, QMainW
         self._hint_timer = QTimer(self)
         self._hint_timer.setSingleShot(True)
         self._hint_timer.timeout.connect(self._clear_hint)
-        QTimer.singleShot(0, self.sound.start_music)
         if puzzle_path:
             QTimer.singleShot(0, lambda: self._open_directly(puzzle_path))
         else:
             self.stage.setCurrentWidget(self.menu)
             self.menu.setFocus()
+            QTimer.singleShot(0, lambda: self.sound.play_music("menu"))
+
+    def _track_key(self) -> str:
+        """Bài nhạc của màn đang chơi: level_01..level_09; màn niêm phong / mở trực tiếp dùng nhạc menu."""
+        level = self.menu.level_by_key(self._level_key) if self._level_key else None
+        return f"level_{level.track:02d}" if level and level.track else "menu"
 
     def _toggle_sound(self) -> None:
         self.btn_mute.setText("🔊" if self.sound.toggle() else "🔇")
@@ -189,6 +194,7 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, StageMixin, AutoMixin, QMainW
             self._start_intro("", f"HỒ SƠ #{Path(path).stem.upper()}")
         else:
             self.stage.setCurrentWidget(self.menu)
+            self.sound.play_music("menu")
 
     def _on_menu(self) -> None:
         if (self._busy or self._staging or self._transitioning or self._intro_active
@@ -208,6 +214,7 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, StageMixin, AutoMixin, QMainW
         self.stage.setCurrentWidget(self.menu)
         self.setWindowTitle(TITLE_MENU)
         self.menu.refresh()
+        self.sound.play_music("menu")
 
     # ---- nạp / làm lại ván -----------------------------------------------------------
     @staticmethod
@@ -258,7 +265,7 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, StageMixin, AutoMixin, QMainW
         self._refresh()
         self.conan.say("Sự thật chỉ có một! Chọn một hồ sơ úp rồi kết luận, nhưng đừng đoán mò nhé.", "think")
         self._say("Bấm vào hồ sơ úp để kết luận. Bấm hồ sơ đã mở để soi manh mối của nó.")
-        self.sound.start_music()
+        self.sound.play_music(self._track_key())
         self._update_controls()
 
     def _record_clear(self) -> int:
