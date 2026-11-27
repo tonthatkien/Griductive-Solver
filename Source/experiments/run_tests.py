@@ -247,7 +247,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description="Chạy thực nghiệm solver trên bộ puzzle.")
     parser.add_argument(
-        "--data", type=Path, default=DEFAULT_DATA_DIR, help="Thư mục chứa puzzles_*"
+        "--data", type=Path, default=DEFAULT_DATA_DIR, help="Thư mục chứa puzzles_* và demo_*"
     )
     parser.add_argument(
         "--out", type=Path, default=DEFAULT_OUT_PATH, help="Đường dẫn file CSV kết quả"

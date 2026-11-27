@@ -14,7 +14,7 @@
     python experiments/run_tests.py --data data --out experiments/results.csv --timeout 30
 
 Chạy từ thư mục `Source/`:
-- `--data`: thư mục chứa `puzzles_*/*.json` (mặc định `data`).
+- `--data`: thư mục chứa `puzzles_*/*.json` và `demo_*/*.json` (mặc định `data`).
 - `--out`: đường dẫn file CSV kết quả (mặc định `experiments/results.csv`).
 - `--timeout`: giới hạn giây cho từng truy vấn DPLL, kể cả trong `uniqueness_check` (mặc định `30`); mỗi puzzle có thể gọi DPLL nhiều lần. Giá trị `0` dừng với `TIMEOUT` ở truy vấn đầu; truyền `--timeout inf` để bỏ giới hạn.
 - `--include-demo`: chạy thêm các file trong `demo_*/*.json` sau bộ puzzle chính (mặc định bỏ qua).

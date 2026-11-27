@@ -580,5 +580,6 @@ class RunTestsStatusRowsTests(unittest.TestCase):
                 self.assertEqual(row["unique"], expected_unique)
                 self.assertEqual(row["deduction_steps"], 0)
 
+
 if __name__ == "__main__":
     unittest.main()
