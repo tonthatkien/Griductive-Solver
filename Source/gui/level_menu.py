@@ -17,7 +17,7 @@ from typing import Dict, List, Optional
 from PySide6.QtCore import QEasingCurve, QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import (QBrush, QColor, QFontMetricsF, QLinearGradient, QPainter, QPainterPath, QPixmap,
                            QPolygonF, QRadialGradient)
-from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QPushButton, QVBoxLayout, QWidget
 
 from gui import icons, theme
 from gui.anim import Tween, clock
@@ -59,6 +59,7 @@ class LevelMenu(QWidget):
     """Trang chọn màn."""
 
     levelChosen = Signal(str, object)         # (key của màn, tâm ghim theo tọa độ của menu)
+    homeRequested = Signal(object)            # về trang chủ (tâm vòng tròn chuyển cảnh)
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -87,6 +88,12 @@ class LevelMenu(QWidget):
         root.setContentsMargins(28, 16, 28, 18)
         root.setSpacing(0)
         header = QHBoxLayout()
+        self.btn_home = QPushButton("◀  TRANG CHỦ")
+        self.btn_home.setFocusPolicy(Qt.FocusPolicy.NoFocus)        # phím mũi tên vẫn dành cho bản đồ
+        self.btn_home.clicked.connect(lambda: self.homeRequested.emit(
+            self.btn_home.mapTo(self, self.btn_home.rect().center())))
+        header.addWidget(self.btn_home)
+        header.addSpacing(14)
         title = NeonTitle("CASE MAP", px=30, spacing=6.0)
         self.sub_label = HeaderChip("hint", "Chọn một địa điểm để điều tra")
         self.cases_chip = HeaderChip("cases", "ĐÃ PHÁ")
@@ -243,6 +250,9 @@ class LevelMenu(QWidget):
 
     def keyPressEvent(self, event) -> None:
         key = event.key()
+        if key == Qt.Key.Key_Escape:
+            self.homeRequested.emit(QPointF(self.width() / 2, self.height() / 2))
+            return
         if not self._pins:
             super().keyPressEvent(event)
             return

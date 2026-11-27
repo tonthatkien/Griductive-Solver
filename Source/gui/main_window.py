@@ -32,7 +32,9 @@ from gui.app_stage import StageMixin
 from gui.app_view import ViewMixin
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+TITLE_HOME = "Griductive"
 TITLE_MENU = "Griductive · Bản đồ vụ án"
+TITLE_TUTORIAL = "Griductive · Cách chơi"
 TITLE_GAME = "Griductive · Conan Case File"
 
 
@@ -61,7 +63,9 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, StageMixin, AutoMixin, QMainW
         self.setMinimumSize(1100, 700)
         self.sound = SoundManager(self)
         self._build_ui()
-        self.menu.set_levels(discover_levels(DATA_DIR), self.progress)
+        levels = discover_levels(DATA_DIR)
+        self.menu.set_levels(levels, self.progress)
+        self.home.set_levels(levels, self.progress)
         self._auto_timer = QTimer(self)
         self._auto_timer.setSingleShot(True)
         self._auto_timer.timeout.connect(self._auto_step)
@@ -71,9 +75,7 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, StageMixin, AutoMixin, QMainW
         if puzzle_path:
             QTimer.singleShot(0, lambda: self._open_directly(puzzle_path))
         else:
-            self.stage.setCurrentWidget(self.menu)
-            self.menu.setFocus()
-            QTimer.singleShot(0, lambda: self.sound.play_music("menu"))
+            QTimer.singleShot(0, lambda: self._show_page(self.home))
 
     def _track_key(self) -> str:
         """Bài nhạc của màn đang chơi: level_01..level_09; màn niêm phong / mở trực tiếp dùng nhạc menu."""
@@ -81,7 +83,9 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, StageMixin, AutoMixin, QMainW
         return f"level_{level.track:02d}" if level and level.track else "menu"
 
     def _toggle_sound(self) -> None:
-        self.btn_mute.setText("🔊" if self.sound.toggle() else "🔇")
+        on = self.sound.toggle()
+        self.btn_mute.setText("🔊" if on else "🔇")
+        self.home.set_sound(on)
 
     # ---- trạng thái, thông báo --------------------------------------------------------
     def _say(self, text: str, kind: str = "info") -> None:
@@ -163,8 +167,30 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, StageMixin, AutoMixin, QMainW
 
     def _transition_done(self) -> None:
         self._transitioning = False
-        if self.stage.currentWidget() is self.menu:
-            self.menu.setFocus()
+        if self.stage.currentWidget() is not self.backdrop:
+            self.stage.currentWidget().setFocus()
+
+    # ---- các trang ngoài màn chơi: trang chủ, bản đồ, cách chơi ----------------------------------
+    def _goto_page(self, page, anchor) -> None:
+        """Chuyển sang `page` bằng hiệu ứng khép/mở vòng tròn quanh `anchor` (tọa độ của trang đang hiện)."""
+        if self._transitioning or self._busy or self.stage.currentWidget() is page:
+            return
+        self.sound.play("radial")
+        self._begin_transition(QPointF(anchor), lambda: self._show_page(page))
+
+    def _show_page(self, page) -> None:
+        titles = {self.home: TITLE_HOME, self.menu: TITLE_MENU, self.tutorial: TITLE_TUTORIAL}
+        self.stage.setCurrentWidget(page)
+        self.setWindowTitle(titles[page])
+        self.sound.play_music("menu")                 # cả ba trang dùng nhạc menu
+        if page is self.home:
+            self.home.refresh()
+            self.home.play_intro()
+        elif page is self.menu:
+            self.menu.refresh()
+        else:
+            self.tutorial.restart()
+        page.setFocus()
 
     def _on_level_chosen(self, key: str, anchor) -> None:
         if self._transitioning or self._busy:
@@ -193,12 +219,11 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, StageMixin, AutoMixin, QMainW
             self.setWindowTitle(TITLE_GAME)
             self._start_intro("", f"HỒ SƠ #{Path(path).stem.upper()}")
         else:
-            self.stage.setCurrentWidget(self.menu)
-            self.sound.play_music("menu")
+            self._show_page(self.home)
 
     def _on_menu(self) -> None:
         if (self._busy or self._staging or self._transitioning or self._intro_active
-                or self.stage.currentWidget() is self.menu):
+                or self.stage.currentWidget() is not self.backdrop):
             return
         self._stop_auto()
         self.radial.close_menu()
@@ -211,10 +236,7 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, StageMixin, AutoMixin, QMainW
     def _swap_to_menu(self) -> None:
         self._space.setEnabled(False)
         self._reset_view()
-        self.stage.setCurrentWidget(self.menu)
-        self.setWindowTitle(TITLE_MENU)
-        self.menu.refresh()
-        self.sound.play_music("menu")
+        self._show_page(self.menu)
 
     # ---- nạp / làm lại ván -----------------------------------------------------------
     @staticmethod

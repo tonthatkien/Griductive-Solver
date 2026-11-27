@@ -11,9 +11,11 @@ from gui.case_intro import CaseIntro
 from gui.components import (ClueListView, ConanToast, ConanWidget, EffectOverlay, GadgetButton, GridView,
                             NeonTitle, NightBackdrop, NotebookPanel, RadialMenu, TerminalMessage)
 from gui.eye_button import EyeButton
+from gui.home_page import HomePage
 from gui.hud_fader import HudContainer
 from gui.iris import IrisTransition
 from gui.level_menu import LevelMenu
+from gui.tutorial_page import TutorialPage
 
 
 class _Stage(QStackedWidget):
@@ -31,10 +33,12 @@ class BuildMixin:
     def _build_ui(self) -> None:
         self.stage = _Stage()
         self.setCentralWidget(self.stage)
+        self.home = HomePage()
         self.menu = LevelMenu()
+        self.tutorial = TutorialPage()
         self.backdrop = NightBackdrop()
-        self.stage.addWidget(self.menu)
-        self.stage.addWidget(self.backdrop)
+        for page in (self.home, self.menu, self.tutorial, self.backdrop):
+            self.stage.addWidget(page)
         self.iris = IrisTransition(self.stage)
         self.hud = HudContainer(self.backdrop)         # toàn bộ giao diện: làm mờ/ẩn được để ngắm nền
         root = QVBoxLayout(self.backdrop)
@@ -98,6 +102,13 @@ class BuildMixin:
         self.btn_eye.clicked.connect(lambda: self._set_hud_hidden(True))
         self.eye_float.clicked.connect(lambda: self._set_hud_hidden(False))
         self.stage.resized.connect(self._layout_iris)
+        self.home.mapRequested.connect(lambda at: self._goto_page(self.menu, at))
+        self.home.tutorialRequested.connect(lambda at: self._goto_page(self.tutorial, at))
+        self.home.soundToggled.connect(self._toggle_sound)
+        self.home.quitRequested.connect(self.close)
+        self.menu.homeRequested.connect(lambda at: self._goto_page(self.home, at))
+        self.tutorial.backRequested.connect(lambda at: self._goto_page(self.home, at))
+        self.tutorial.playRequested.connect(lambda at: self._goto_page(self.menu, at))
         self.menu.levelChosen.connect(self._on_level_chosen)
         self.menu.conan.typed.connect(lambda: self.sound.play("type"))
         self.grid.cardClicked.connect(self._on_card_clicked)
