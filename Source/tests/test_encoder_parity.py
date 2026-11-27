@@ -1,4 +1,4 @@
-"""Test C4: encode PARITY. Duyệt mọi assignment của vùng, đếm số cách gán biến phụ thỏa CNF"""
+"""Test encode PARITY: duyệt mọi assignment của vùng, đếm số cách gán biến phụ thỏa CNF"""
 import itertools
 import unittest
 
@@ -12,6 +12,7 @@ COLB = {"type": "col", "letter": "B"}
 NEI_B2 = {"type": "neighbors", "cell": "B2"}
 NEI_A1 = {"type": "neighbors", "cell": "A1"}
 ONE_CELL = {"type": "list", "cells": ["B2"]}
+TWO_CELLS = {"type": "list", "cells": ["A1", "B1"]}
 
 
 def mk(parity: str, region: dict, **extra) -> Clue:
@@ -25,7 +26,7 @@ def count_extensions(clauses, fixed, aux_vars) -> int:
     for values in itertools.product([False, True], repeat=len(aux_vars)):
         assign = dict(fixed)
         assign.update(zip(aux_vars, values))
-        if all(any(assign[abs(l)] == (l > 0) for l in c) for c in clauses):
+        if all(any(assign[abs(lit)] == (lit > 0) for lit in c) for c in clauses):
             total += 1
     return total
 
@@ -77,12 +78,13 @@ class TestEncodeParity(unittest.TestCase):
             enc = Encoder(N)
             clauses = enc.encode_parity(mk(parity, ROW1))
             fixed = {1: False, 2: False, 3: False}
-            aux = list(range(10, 10 + enc.num_aux))
+            first = board.first_aux_var(N)
+            aux = list(range(first, first + enc.num_aux))
             self.assertEqual(count_extensions(clauses, fixed, aux), expected, parity)
 
     def test_clause_and_aux_counts(self):
         # m ô: m = 1 -> 1 clause, 0 aux; m >= 2 -> 4m - 6 clause, m - 2 aux
-        cases = [(ONE_CELL, 1, 0), (NEI_A1, 6, 1), (ROW1, 6, 1), (NEI_B2, 26, 6)]
+        cases = [(ONE_CELL, 1, 0), (NEI_A1, 6, 1), (ROW1, 6, 1), (NEI_B2, 26, 6), (TWO_CELLS, 2, 0)]
         for region, num_clauses, num_aux in cases:
             enc = Encoder(N)
             clauses = enc.encode_parity(mk("ODD", region))
@@ -90,17 +92,13 @@ class TestEncodeParity(unittest.TestCase):
                 self.assertEqual(len(clauses), num_clauses)
                 self.assertEqual(enc.num_aux, num_aux)
 
-    def test_two_cell_region_has_two_clauses_and_no_aux(self):
-        enc = Encoder(N)
-        clauses = enc.encode_parity(mk("EVEN", {"type": "list", "cells": ["A1", "B1"]}))
-        self.assertEqual(len(clauses), 2)
-        self.assertEqual(enc.num_aux, 0)
-
     def test_aux_vars_start_after_primary_and_are_separate(self):
         enc = Encoder(N)
         clauses = enc.encode_parity(mk("ODD", NEI_B2))
         used = {abs(l) for c in clauses for l in c}
-        self.assertEqual(sorted(v for v in used if v > 9), list(range(10, 16)))
+        first = board.first_aux_var(N)
+        self.assertEqual(sorted(v for v in used if v >= first),
+                         list(range(first, first + enc.num_aux)))
         self.assertNotIn(5, used)  # ô B2 không thuộc vùng neighbors của chính nó
 
     def test_second_call_continues_aux_numbering(self):

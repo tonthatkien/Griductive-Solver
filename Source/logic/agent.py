@@ -3,7 +3,7 @@
 E1 kiểm tra KB trước khi thử giả định đối lập; không coi một model SAT là bằng
 chứng về trạng thái. Timeout được truyền ra bằng TimeoutError, không thành UNSAT.
 E2 chọn ô forced theo row-major và cập nhật PublicKB sau từng verdict ACCEPTED.
-E3 ghi trace thật cho từng bước; E4/E5 triển khai ở task riêng.
+E3 ghi trace thật; E5 gợi ý từ PublicKB và tập clue đủ để chứng minh.
 """
 from __future__ import annotations
 
@@ -169,8 +169,27 @@ class LogicAgent:
         self._selection_status = SOLVED if not remaining else STUCK
         return None
 
-    def hint(self, public_kb):
-        raise NotImplementedError
+    def hint(self, public_kb: PublicKB) -> tuple[str, str, list[str]] | None:
+        """Gợi ý ô forced đầu tiên và các clue công khai đủ chứng minh verdict.
+
+        Trả (cell, verdict, clue_ids), tương thích GUI; None nếu không còn forced
+        hoặc KB mâu thuẫn. Không nộp verdict, lật thẻ hay ghi deduction trace.
+        Loại từng clue nếu verdict vẫn suy ra từ các clue còn lại và proved.
+        Tập còn lại là subset-minimal, không bảo đảm ít clue nhất; giữ thứ tự
+        công khai ban đầu. Có thể rỗng nếu chỉ proved đã đủ chứng minh.
+        SAT counters vẫn tích lũy; TimeoutError/ValueError truyền ra như classify.
+        """
+        forced = self.next_forced(public_kb)
+        if forced is None:
+            return None
+        cell, verdict = forced
+        clues = list(public_kb.revealed_clues)
+        for clue in tuple(clues):
+            remaining = [candidate for candidate in clues if candidate is not clue]
+            reduced = PublicKB(public_kb.n, tuple(remaining), dict(public_kb.proved))
+            if self.classify(reduced, cell) == verdict:
+                clues = remaining
+        return cell, verdict, [clue.id for clue in clues]
 
     def step(self, engine: RevealEngine) -> TraceEntry | None:
         """Thực hiện một bước forced và lưu trace sau ACCEPTED, hoặc trả None.
