@@ -70,6 +70,69 @@ class RunTestsDiscoveryAndValidationTests(unittest.TestCase):
             ],
         )
 
+    def test_discover_excludes_demo_by_default_and_appends_when_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel in (
+                "puzzles_4x4/a.json",
+                "puzzles_3x3/a.json",
+                "demo_extra/a.json",
+                "demo_cases/b.json",
+                "demo_cases/a.json",
+            ):
+                _write_json(root / rel, {})
+            default_got = [f"{p.parent.name}/{p.name}" for p in discover(root)]
+            demo_got = [
+                f"{p.parent.name}/{p.name}" for p in discover(root, include_demo=True)
+            ]
+        self.assertEqual(default_got, ["puzzles_3x3/a.json", "puzzles_4x4/a.json"])
+        self.assertEqual(
+            demo_got,
+            [
+                "puzzles_3x3/a.json",
+                "puzzles_4x4/a.json",
+                "demo_cases/a.json",
+                "demo_cases/b.json",
+                "demo_extra/a.json",
+            ],
+        )
+
+    def test_discover_on_real_data_dir_excludes_demo_unless_enabled(self) -> None:
+        default_paths = discover(DATA_DIR)
+        with_demo = discover(DATA_DIR, include_demo=True)
+        self.assertTrue(default_paths)
+        self.assertFalse(any(p.parent.name.startswith("demo_") for p in default_paths))
+        self.assertEqual(with_demo[:len(default_paths)], default_paths)
+        demos = [f"{p.parent.name}/{p.name}" for p in with_demo[len(default_paths):]]
+        self.assertTrue(demos)
+        self.assertTrue(all(item.startswith("demo_") for item in demos))
+        self.assertTrue(
+            {"demo_cases/ambiguous.json", "demo_cases/inconsistent.json"}.issubset(demos)
+        )
+        self.assertEqual(demos, sorted(demos, key=lambda item: tuple(item.split("/", 1))))
+
+    def test_cli_include_demo_flag_controls_demo_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            _write_json(root / "puzzles_3x3/p01.json", chain_puzzle())
+            _write_json(root / "demo_cases/ambig.json", ambiguous_puzzle())
+            out_default = root / "default.csv"
+            out_demo = root / "with_demo.csv"
+            code_default, _, err_default = _run_cli(root, out_default, "--timeout", "10")
+            code_demo, _, err_demo = _run_cli(
+                root, out_demo, "--timeout", "10", "--include-demo"
+            )
+            default_rows = _read_csv(out_default)
+            demo_rows = _read_csv(out_demo)
+
+        self.assertEqual((code_default, err_default), (0, ""))
+        self.assertEqual((code_demo, err_demo), (0, ""))
+        self.assertEqual([r["puzzle"] for r in default_rows], ["puzzles_3x3/p01.json"])
+        self.assertEqual(
+            [r["puzzle"] for r in demo_rows],
+            ["puzzles_3x3/p01.json", "demo_cases/ambig.json"],
+        )
+
     def test_negative_and_nan_timeout_are_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -504,6 +567,18 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         self.assertEqual(row["unique"], "UNIQUE")
         self.assertEqual(row["deduction_steps"], 1)
         self.assertEqual((row["primary_vars"], row["aux_vars"], row["clauses"]), (9, 0, 10))
+
+    def test_bundled_demo_cases_report_expected_failures(self) -> None:
+        cases = (
+            ("demo_cases/ambiguous.json", "STUCK", "MULTIPLE"),
+            ("demo_cases/inconsistent.json", "INCONSISTENT", "UNSAT"),
+        )
+        for rel_path, expected_status, expected_unique in cases:
+            with self.subTest(puzzle=rel_path):
+                row = run_one(DATA_DIR / rel_path, timeout=10)
+                self.assertEqual(row["status"], expected_status)
+                self.assertEqual(row["unique"], expected_unique)
+                self.assertEqual(row["deduction_steps"], 0)
 
 if __name__ == "__main__":
     unittest.main()
