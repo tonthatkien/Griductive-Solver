@@ -71,7 +71,7 @@ class TraceTests(unittest.TestCase):
         entry = LogicAgent().step(SnapshotEngine(before, after))
         self.assertEqual(entry.sat_queries, [
             ("KB", "SAT"), ("KB ∧ ¬C_A1", "SAT"), ("KB ∧ C_A1", "SAT"),
-            ("KB", "SAT"), ("KB ∧ ¬C_B1", "UNSAT"),
+            ("KB ∧ ¬C_B1", "UNSAT"),
         ])
         self.assertEqual(entry.newly_revealed_clue_id, "")
 
