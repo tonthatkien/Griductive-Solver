@@ -1,0 +1,10 @@
+puzzle,size,status,unique,primary_vars,aux_vars,clauses,sat_calls,trace_sat_calls,untraced_sat_calls,decisions,propagations,backtracks,deduction_steps,runtime_sec
+puzzles_3x3/p01.json,3,SOLVED,UNIQUE,9,0,30,49,30,19,0,271,0,7,0.012082
+puzzles_3x3/p02.json,3,SOLVED,UNIQUE,9,17,92,47,27,20,16,376,0,7,0.025659
+puzzles_3x3/p03.json,3,SOLVED,UNIQUE,9,18,107,71,50,21,11,586,0,8,0.039191
+puzzles_4x4/p01.json,4,SOLVED,UNIQUE,16,51,240,163,126,37,358,5527,15,14,0.921655
+puzzles_4x4/p02.json,4,SOLVED,UNIQUE,16,63,308,131,92,39,44,2331,0,14,0.417616
+puzzles_4x4/p03.json,4,SOLVED,UNIQUE,16,42,196,201,160,41,54,3322,6,15,0.398418
+puzzles_5x5/p01.json,5,SOLVED,UNIQUE,25,163,778,383,318,65,864,16139,121,24,7.349474
+puzzles_5x5/p02.json,5,SOLVED,UNIQUE,25,95,499,301,237,64,299,11881,48,24,5.146728
+puzzles_5x5/p03.json,5,SOLVED,UNIQUE,25,204,815,433,370,63,1224,23632,137,23,10.070719
