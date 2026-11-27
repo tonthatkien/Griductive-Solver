@@ -10,9 +10,9 @@ script ghi dòng kết quả đó rồi chạy tiếp các bài sau.
 
 Cách đếm các cột kết quả:
 - `unique`: kiểm tra bằng `uniqueness_check` trên toàn bộ clue của file JSON
-  kèm `FACT` cho các ô `initially_revealed`, ghi `UNIQUE`, `MULTIPLE`, `UNSAT`
-  hoặc `TIMEOUT` (hết giờ ở bước này không đổi `status`). Bước này chạy tách
-  biệt, không cộng vào `sat_calls`, các bộ đếm DPLL hay `runtime_sec`.
+  kèm `FACT` cho các ô `initially_revealed`, ghi `UNIQUE`, `MULTIPLE`, `UNSAT`,
+  `TIMEOUT` hoặc `ERROR` (hết giờ/lỗi ở đây không đổi `status`). Bước này chạy
+  tách biệt, không cộng vào `sat_calls`, các bộ đếm DPLL hay `runtime_sec`.
 - `sat_calls`: tổng số lần `LogicAgent` gọi `DPLLSolver.solve`, gồm truy vấn
   kiểm chứng của engine, lần kiểm tra KB cuối và truy vấn bị timeout.
 - `trace_sat_calls`: tổng `len(entry.sat_queries)` qua các bước `ACCEPTED`
@@ -22,19 +22,18 @@ Cách đếm các cột kết quả:
   dở trước khi timeout).
 - `decisions`, `propagations`, `backtracks`: cộng từ `SolverStats` (D4) qua mọi
   truy vấn trong `sat_calls`, gồm cả truy vấn kiểm chứng của engine và truy vấn
-  bị timeout, không gồm `uniqueness_check` và lượt đếm `reveal_waves`:
-  `decisions` là số lần chọn biến rẽ nhánh trong `_dpll`, `propagations` là số
-  literal gán qua unit clause (không tính `assumptions`), `backtracks` là số
-  nhánh trả `UNSAT`.
-- `primary_vars`, `aux_vars`, `clauses`: đếm bằng `Encoder.build_kb` trên
-  `PublicKB` lúc dừng (lượt quét cuối, hoặc lúc timeout/lỗi); để trống nếu
-  chưa có engine hoặc `build_kb` lỗi.
-- `deduction_steps`, `runtime_sec`: số bước `ACCEPTED` trong `agent.trace` và
-  thời gian nạp puzzle và chạy `auto_solve` (giây).
-- `reveal_waves`: số lượt gom và nộp toàn bộ ô bị ép từ `PublicKB` hiện tại
-  trong một lượt chạy riêng bằng `LogicAgent.classify`; không cộng vào
-  `sat_calls`, các bộ đếm DPLL hay `runtime_sec`, và để trống khi truyền sẵn
-  `engine` hoặc chưa nạp được file.
+  bị timeout, không gồm `uniqueness_check`: `decisions` là số lần chọn biến rẽ
+  nhánh trong `_dpll`, `propagations` là số literal gán qua unit clause (không
+  tính `assumptions`), `backtracks` là số nhánh trả `UNSAT`.
+- `primary_vars`, `aux_vars`, `clauses`: kích thước encoding của cả puzzle,
+  đếm bằng `Encoder.build_kb` (C6) trên toàn bộ clue của file JSON kèm `FACT`
+  `init_<cell>` cho các ô `initially_revealed`. Đây là cùng tập clue mà
+  `uniqueness_check` nhận. Số này không phụ thuộc agent dừng ở đâu, nên dòng
+  STUCK/TIMEOUT có cùng số với dòng SOLVED của cùng bài. Để trống khi truyền
+  sẵn `engine` hoặc khi đọc file/`build_kb` lỗi (lúc đó `unique` ghi `ERROR`).
+- `deduction_steps`: số bước `ACCEPTED` trong `agent.trace`. Mỗi bước chứng
+  minh một ô và lật đúng một clue mới, nên cột này cũng là số lượt lật thẻ.
+- `runtime_sec`: thời gian nạp puzzle và chạy `auto_solve` (giây).
 """
 from __future__ import annotations
 
@@ -51,17 +50,10 @@ SOURCE_DIR = Path(__file__).resolve().parent.parent
 if str(SOURCE_DIR) not in sys.path:
     sys.path.insert(0, str(SOURCE_DIR))
 
-from engine import board  # noqa: E402
 from engine.character import parse_character  # noqa: E402
 from engine.clue import Clue  # noqa: E402
-from engine.constants import (  # noqa: E402
-    ACCEPTED,
-    CRIMINAL,
-    INCONSISTENT,
-    INNOCENT,
-    UNKNOWN,
-)
-from engine.game_state import GameEngine  # noqa: E402
+from engine.constants import CRIMINAL, INNOCENT  # noqa: E402
+from engine.game_state import GameEngine, PublicKB  # noqa: E402
 from logic.agent import (  # noqa: E402
     LogicAgent,
     RevealEngine,
@@ -69,7 +61,7 @@ from logic.agent import (  # noqa: E402
     UNSAT,
     uniqueness_check,
 )
-from logic.cnf_encoder import Encoder  # noqa: E402
+from logic.cnf_encoder import KB, Encoder  # noqa: E402
 
 DEFAULT_DATA_DIR = SOURCE_DIR / "data"
 DEFAULT_OUT_PATH = SOURCE_DIR / "experiments" / "results.csv"
@@ -92,7 +84,6 @@ FIELDNAMES = (
     "propagations",
     "backtracks",
     "deduction_steps",
-    "reveal_waves",
     "runtime_sec",
 )
 
@@ -148,59 +139,25 @@ def _log_error(puzzle_name: str, exc: Exception, stage: str = "") -> None:
     print(f"ERROR {puzzle_name}{suffix}: {type(exc).__name__}{detail}", file=sys.stderr)
 
 
-def _check_uniqueness(path: Path, timeout: float | None) -> str:
+def _full_clue_kb(path: Path) -> tuple[list[Clue], int, KB]:
+    """Đọc toàn bộ clue (kèm FACT `init_<cell>`) một lần và dựng KB của cả puzzle."""
+    clues, n = _puzzle_clues(path)
+    return clues, n, Encoder(n).build_kb(PublicKB(n, tuple(clues)))
+
+
+def _check_uniqueness(
+    clues: list[Clue], n: int, timeout: float | None, puzzle_name: str
+) -> str:
     try:
-        clues, n = _puzzle_clues(path)
         is_unique, count = uniqueness_check(clues, n, timeout=timeout)
     except TimeoutError:
         return TIMEOUT
     except Exception as exc:
-        _log_error(f"{path.parent.name}/{path.name}", exc, "unique")
+        _log_error(puzzle_name, exc, "unique")
         return ERROR
     if is_unique:
         return UNIQUE
     return UNSAT if count == 0 else MULTIPLE
-
-
-def _count_reveal_waves(path: Path, timeout: float | None) -> int | str:
-    """Đếm số wave lật thẻ qua một lượt chạy riêng bằng `LogicAgent.classify`.
-
-    Mỗi wave gom mọi ô chưa chứng minh đã bị KB hiện tại ép trạng thái, rồi nộp
-    hết qua `submit_verdict` để mở clue cho wave sau. Hàm tự tạo `GameEngine` và
-    `LogicAgent` riêng nên không cộng vào bộ đếm của `run_one`; trả `TIMEOUT` khi
-    quá giờ hoặc `ERROR` khi gặp lỗi.
-    """
-    try:
-        engine = GameEngine()
-        engine.load_puzzle(path)
-        agent = LogicAgent(timeout=timeout)
-        waves = 0
-        while True:
-            public_kb = engine.get_public_kb()
-            forced: list[tuple[str, str]] = []
-            for cell in board.all_cells(public_kb.n):
-                if cell in public_kb.proved:
-                    continue
-                verdict = agent.classify(public_kb, cell)
-                if verdict == INCONSISTENT:
-                    return waves
-                if verdict in (CRIMINAL, INNOCENT):
-                    forced.append((cell, verdict))
-                elif verdict != UNKNOWN:
-                    raise RuntimeError(f"classify trả trạng thái không hợp lệ: {verdict!r}")
-            if not forced:
-                return waves
-            for cell, verdict in forced:
-                if engine.submit_verdict(cell, verdict, agent.classify) != ACCEPTED:
-                    raise RuntimeError(
-                        f"Engine từ chối verdict đã chứng minh: {cell} {verdict}"
-                    )
-            waves += 1
-    except TimeoutError:
-        return TIMEOUT
-    except Exception as exc:
-        _log_error(f"{path.parent.name}/{path.name}", exc, "waves")
-        return ERROR
 
 
 def run_one(
@@ -240,21 +197,17 @@ def run_one(
         _log_error(puzzle_name, exc)
     runtime_sec = round(time.perf_counter() - start, 6)
 
-    primary_vars: int | str = ""
-    aux_vars: int | str = ""
-    clauses: int | str = ""
-    if engine is not None:
+    unique = primary_vars = aux_vars = clauses = ""
+    if check_unique:
         try:
-            public_kb = engine.get_public_kb()
-            kb = Encoder(public_kb.n).build_kb(public_kb)
-            primary_vars = kb.num_primary
-            aux_vars = kb.num_aux
-            clauses = kb.num_clauses
+            clues, n, kb = _full_clue_kb(puzzle_path)
         except Exception as exc:
             _log_error(puzzle_name, exc, "kb")
+            unique = ERROR
+        else:
+            primary_vars, aux_vars, clauses = kb.num_primary, kb.num_aux, kb.num_clauses
+            unique = _check_uniqueness(clues, n, timeout, puzzle_name)
 
-    unique = _check_uniqueness(puzzle_path, timeout) if check_unique else ""
-    reveal_waves = _count_reveal_waves(puzzle_path, timeout) if check_unique else ""
     trace_sat_calls = sum(len(entry.sat_queries) for entry in agent.trace)
     return {
         "puzzle": puzzle_name,
@@ -271,7 +224,6 @@ def run_one(
         "propagations": agent.total_propagations,
         "backtracks": agent.total_backtracks,
         "deduction_steps": len(agent.trace),
-        "reveal_waves": reveal_waves,
         "runtime_sec": runtime_sec,
     }
 
