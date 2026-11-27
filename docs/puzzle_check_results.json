@@ -1,0 +1,282 @@
+{
+  "standard_puzzles": 9,
+  "intentional_demos": 2,
+  "all_passed": true,
+  "results": [
+    {
+      "path": "puzzles_3x3/p01.json",
+      "n": 3,
+      "sha256": "5c9e1d397a4fb4cf12da7e928d99b23c0d8d5b474041d67a559a7f3eb15fbd2c",
+      "clues_only": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "clues_plus_initial_facts": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "stored_labels_satisfy_all_clues": true,
+      "agent_status": "SOLVED",
+      "accepted_steps": 7,
+      "initial_proved": 2,
+      "final_proved": 9,
+      "passes_expectation": true
+    },
+    {
+      "path": "puzzles_3x3/p02.json",
+      "n": 3,
+      "sha256": "8666c453031632c153c3a09c076ec31324c8a2f8005c71cadb93930ea5db84e3",
+      "clues_only": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "clues_plus_initial_facts": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "stored_labels_satisfy_all_clues": true,
+      "agent_status": "SOLVED",
+      "accepted_steps": 7,
+      "initial_proved": 2,
+      "final_proved": 9,
+      "passes_expectation": true
+    },
+    {
+      "path": "puzzles_3x3/p03.json",
+      "n": 3,
+      "sha256": "970a0a51706b79b9026cc57ebe36f250e5610c21f660202a906ba4307ad341fc",
+      "clues_only": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "clues_plus_initial_facts": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "stored_labels_satisfy_all_clues": true,
+      "agent_status": "SOLVED",
+      "accepted_steps": 8,
+      "initial_proved": 1,
+      "final_proved": 9,
+      "passes_expectation": true
+    },
+    {
+      "path": "puzzles_4x4/p01.json",
+      "n": 4,
+      "sha256": "b4a307b6294197ea2ec772407805fa41f995b14a9b552d2d32734a0e482952e8",
+      "clues_only": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "clues_plus_initial_facts": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "stored_labels_satisfy_all_clues": true,
+      "agent_status": "SOLVED",
+      "accepted_steps": 14,
+      "initial_proved": 2,
+      "final_proved": 16,
+      "passes_expectation": true
+    },
+    {
+      "path": "puzzles_4x4/p02.json",
+      "n": 4,
+      "sha256": "35f18536d077b232e9201e76992b24a87a53af87086e108e151a24c2ac24407d",
+      "clues_only": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "clues_plus_initial_facts": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "stored_labels_satisfy_all_clues": true,
+      "agent_status": "SOLVED",
+      "accepted_steps": 14,
+      "initial_proved": 2,
+      "final_proved": 16,
+      "passes_expectation": true
+    },
+    {
+      "path": "puzzles_4x4/p03.json",
+      "n": 4,
+      "sha256": "18fbcb8d90817d6e8632bf14ae242c2ee528958e11efe3f097c8bd5dd063dd22",
+      "clues_only": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "clues_plus_initial_facts": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "stored_labels_satisfy_all_clues": true,
+      "agent_status": "SOLVED",
+      "accepted_steps": 15,
+      "initial_proved": 1,
+      "final_proved": 16,
+      "passes_expectation": true
+    },
+    {
+      "path": "puzzles_5x5/p01.json",
+      "n": 5,
+      "sha256": "42147193c7f493b22127c142032f81cfbbfb1f74afbf751cd8eabb0e7adf0c86",
+      "clues_only": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "exhaustive semantic enumeration with early false-clue pruning",
+        "agreement": true
+      },
+      "clues_plus_initial_facts": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "exhaustive semantic enumeration with early false-clue pruning",
+        "agreement": true
+      },
+      "stored_labels_satisfy_all_clues": true,
+      "agent_status": "SOLVED",
+      "accepted_steps": 24,
+      "initial_proved": 1,
+      "final_proved": 25,
+      "passes_expectation": true
+    },
+    {
+      "path": "puzzles_5x5/p02.json",
+      "n": 5,
+      "sha256": "b5bcd68742c93f2ae18a73a6b5b225ff19e045923e74cf94045f2576b146fed0",
+      "clues_only": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "exhaustive semantic enumeration with early false-clue pruning",
+        "agreement": true
+      },
+      "clues_plus_initial_facts": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "exhaustive semantic enumeration with early false-clue pruning",
+        "agreement": true
+      },
+      "stored_labels_satisfy_all_clues": true,
+      "agent_status": "SOLVED",
+      "accepted_steps": 24,
+      "initial_proved": 1,
+      "final_proved": 25,
+      "passes_expectation": true
+    },
+    {
+      "path": "puzzles_5x5/p03.json",
+      "n": 5,
+      "sha256": "693a966d739028992666163221cd3615d9d19be39e0d2f06be1ad2898204aa25",
+      "clues_only": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "exhaustive semantic enumeration with early false-clue pruning",
+        "agreement": true
+      },
+      "clues_plus_initial_facts": {
+        "dpll_unique": true,
+        "dpll_count_capped_at_2": 1,
+        "semantic_count_exact": 1,
+        "reference_method": "exhaustive semantic enumeration with early false-clue pruning",
+        "agreement": true
+      },
+      "stored_labels_satisfy_all_clues": true,
+      "agent_status": "SOLVED",
+      "accepted_steps": 23,
+      "initial_proved": 2,
+      "final_proved": 25,
+      "passes_expectation": true
+    },
+    {
+      "path": "demo_cases/ambiguous.json",
+      "n": 3,
+      "sha256": "f3a8228982582a89928b3c862171c718e2a8275ee5da9b96be641200c26c6765",
+      "clues_only": {
+        "dpll_unique": false,
+        "dpll_count_capped_at_2": 2,
+        "semantic_count_exact": 256,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "clues_plus_initial_facts": {
+        "dpll_unique": false,
+        "dpll_count_capped_at_2": 2,
+        "semantic_count_exact": 256,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "stored_labels_satisfy_all_clues": true,
+      "agent_status": "STUCK",
+      "accepted_steps": 0,
+      "initial_proved": 1,
+      "final_proved": 1,
+      "passes_expectation": true
+    },
+    {
+      "path": "demo_cases/inconsistent.json",
+      "n": 3,
+      "sha256": "468b7fda8e2a06d5bb20baa3e8e71e4ea344cba0b3ce2b32e66fbe71613be98e",
+      "clues_only": {
+        "dpll_unique": false,
+        "dpll_count_capped_at_2": 0,
+        "semantic_count_exact": 0,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "clues_plus_initial_facts": {
+        "dpll_unique": false,
+        "dpll_count_capped_at_2": 0,
+        "semantic_count_exact": 0,
+        "reference_method": "B2 exhaustive semantic brute force",
+        "agreement": true
+      },
+      "stored_labels_satisfy_all_clues": false,
+      "agent_status": "INCONSISTENT",
+      "accepted_steps": 0,
+      "initial_proved": 2,
+      "final_proved": 2,
+      "passes_expectation": true
+    }
+  ]
+}
