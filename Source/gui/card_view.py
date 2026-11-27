@@ -33,6 +33,7 @@ class CardView(CardBackMixin, CardFrontMixin, CardHighlightMixin, QWidget):
         self.status: Optional[str] = None
         self.clue_text = ""
         self._mode = ""
+        self._label = ""
         self._hint = False
         self._input = True
         self._flip = Tween(self, self.update, QEasingCurve.Type.InOutSine)
@@ -89,6 +90,10 @@ class CardView(CardBackMixin, CardFrontMixin, CardHighlightMixin, QWidget):
             if not self._type_busy:
                 self._type.jump(1.0)
 
+    def is_revealing(self) -> bool:
+        """True khi thẻ còn đang lật hoặc còn đang gõ chữ clue sau khi lật."""
+        return self._type_busy or (self.status is not None and self._flip.state() == QVariantAnimation.State.Running)
+
     def appear(self, delay_ms: int = 0) -> None:
         """Thẻ ẩn đi rồi lật vào (mở ngang + hiện dần + nhô lên) sau `delay_ms`."""
         self._appear_timer.stop()
@@ -134,9 +139,10 @@ class CardView(CardBackMixin, CardFrontMixin, CardHighlightMixin, QWidget):
         self._type_busy = False
         self.update()
 
-    def set_highlight(self, mode: str) -> None:
-        """mode: '' | 'target' (laser + kính định vị) | 'source' (chủ của clue)."""
-        self._mode = mode
+    def set_highlight(self, mode: str, label: str = "") -> None:
+        """mode: '' | 'target' (laser: ô clue nhắc tới) | 'source' (chủ của clue)
+        | 'basis' (thẻ căn cứ, `label` là số thứ tự ghi trong sổ tay) | 'infer' (thẻ sắp được lật)."""
+        self._mode, self._label = mode, label
         self._sync_scan()
 
     def set_hint(self, on: bool) -> None:

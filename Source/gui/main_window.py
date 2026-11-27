@@ -23,12 +23,12 @@ from engine.game_state import PublicKB
 from gui.clue_text import format_clue_text
 from gui.levels import discover_levels
 from gui.progress import DEFAULT_PATH, Progress, compute_stars
-from gui.solver_driver import agent_counters
 from gui.sound import SoundManager
 from gui.task import Task
 from gui.app_auto import AutoMixin
 from gui.app_build import BuildMixin
 from gui.app_play import PlayMixin
+from gui.app_stage import StageMixin
 from gui.app_view import ViewMixin
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -36,7 +36,7 @@ TITLE_MENU = "Griductive · Bản đồ vụ án"
 TITLE_GAME = "Griductive · Conan Case File"
 
 
-class MainWindow(BuildMixin, ViewMixin, PlayMixin, AutoMixin, QMainWindow):
+class MainWindow(BuildMixin, ViewMixin, PlayMixin, StageMixin, AutoMixin, QMainWindow):
     def __init__(self, engine, agent, puzzle_path: Optional[str] = None) -> None:
         super().__init__()
         self.engine, self.agent = engine, agent
@@ -48,8 +48,9 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, AutoMixin, QMainWindow):
         self._busy = False
         self._transitioning = False
         self._auto_active = self._auto_paused = False
-        self._step_no, self._dpll_ms = 0, 0.0
-        self._baseline = agent_counters(agent)
+        self._auto_waited = False
+        self._step_no = 0
+        self._staging, self._stage_token = False, 0       # đang dàn cảnh "căn cứ → suy ra → lật" (app_stage.py)
         self._hint_cell: Optional[str] = None
         self._level_key: Optional[str] = None
         self._hints_used = self._wrong_attempts = 0     # để tính sao (progress.compute_stars)
@@ -88,7 +89,7 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, AutoMixin, QMainWindow):
         return self.kb is not None and len(self.kb.proved) >= self.kb.n * self.kb.n
 
     def _update_controls(self) -> None:
-        busy, running, solved = self._busy, self._auto_running(), self._solved()
+        busy, running, solved = self._busy or self._staging, self._auto_running(), self._solved()
         free = not busy and not running and not solved
         self.grid.set_input_enabled(free)
         self.btn_hint.setEnabled(free)
@@ -190,7 +191,8 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, AutoMixin, QMainWindow):
             self.stage.setCurrentWidget(self.menu)
 
     def _on_menu(self) -> None:
-        if self._busy or self._transitioning or self._intro_active or self.stage.currentWidget() is self.menu:
+        if (self._busy or self._staging or self._transitioning or self._intro_active
+                or self.stage.currentWidget() is self.menu):
             return
         self._stop_auto()
         self.radial.close_menu()
@@ -246,9 +248,9 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, AutoMixin, QMainWindow):
         chars = self.engine.characters                      # tuple[Character], row-major
         self.names = {ch.cell: ch.name for ch in chars}
         self.grid.set_board(n, {ch.cell: (ch.name, ch.profession) for ch in chars})
+        self._cancel_staging()
         self.notebook.reset()
-        self._baseline = agent_counters(self.agent)
-        self._step_no, self._dpll_ms, self._hint_cell = 0, 0.0, None
+        self._step_no, self._hint_cell = 0, None
         self._hints_used = self._wrong_attempts = 0
         self._auto_used = self._recorded = False
         self.radial.close_menu()
@@ -283,15 +285,8 @@ class MainWindow(BuildMixin, ViewMixin, PlayMixin, AutoMixin, QMainWindow):
                                          f"{format_clue_text(c, self.names)}")
                                   for c in self.kb.revealed_clues])
         self.progress_label.setText(f"Đã phá {len(self.kb.proved)}/{self.kb.n ** 2} hồ sơ")
-        self._update_stats()
         if animate:
             self.sound.play("flip")
-
-    def _update_stats(self) -> None:
-        now = agent_counters(self.agent)
-        d = {k: now[k] - self._baseline[k] for k in now}
-        self.notebook.set_stats(self._step_no, d["sat_calls"], d["decisions"], d["propagations"],
-                                d["backtracks"], self._dpll_ms)
 
     def _clue_of(self, clue_id: str):
         return next((c for c in self.kb.revealed_clues if c.id == clue_id), None) if self.kb else None

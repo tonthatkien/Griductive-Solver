@@ -95,10 +95,6 @@ QFrame#notebookCover {{
     background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #17233b, stop:1 #0b1222);
     border: 1.5px solid #2d4373; border-radius: 12px;
 }}
-QLabel#statchip {{
-    background: #10192e; border: 1px solid #2b3f6b; border-radius: 8px;
-    color: #e6eefc; font-family: "{FONT_MONO}"; font-size: 12px; padding: 5px 4px;
-}}
 QTextBrowser#notebook {{
     background: #0d1526; color: #dce6f7; border: 1px solid #253861; border-radius: 8px;
     font-family: "Segoe UI", "{FONT_DOSSIER}", sans-serif; font-size: 13px; padding: 8px;
