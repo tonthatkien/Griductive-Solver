@@ -62,13 +62,13 @@ Số `primary_vars` cố định theo diện tích lưới (`9`, `16`, `25`), c�
 
 ### Quan hệ giữa runtime, `clauses` và bộ đếm tìm kiếm
 
-Từ `3×3` lên `5×5`, trung bình `clauses` tăng khoảng 9.1 lần (`76.3` lên `697.3`), trong khi `runtime_median_mean` tăng khoảng 263 lần (`0.025s` lên `0.540s` ở `4×4` và `6.578s` ở `5×5`). Nguyên nhân cộng hưởng từ cả kích thước KB lẫn số lần gọi và độ sâu tìm kiếm của DPLL: trung bình `sat_calls` tăng từ `55.7` lên `372.3`, còn `decisions` tăng từ `9` lên `795.7`.
+Từ `3×3` lên `5×5`, trung bình `clauses` tăng khoảng 9.1 lần (`76.3` lên `697.3`), trong khi `runtime_median_mean` tăng khoảng 263 lần (`0.025s` lên `0.540s` ở `4×4` và `6.578s` ở `5×5`). Runtime tăng nhanh hơn `clauses` vì cùng lúc tăng cả `sat_calls` (`55.7` lên `372.3`) và `decisions` (`9` lên `795.7`).
 
-Trong cùng nhóm `4×4`, `puzzles_4x4/p01.json` có `clauses = 240` (nhỏ hơn `308` của `p02`) và `sat_calls = 163` (nhỏ hơn `201` của `p03`), nhưng `runtime_median` lên tới `0.861s`, hơn gấp đôi `0.372s` của `p02` và `0.388s` của `p03`. Cột `decisions` và `backtracks` giải thích chênh lệch này: `4x4/p01` mất `decisions = 358`, `backtracks = 15` và `propagations = 5527`, trong khi `4x4/p02` cần `44` / `0` / `2331` và `4x4/p03` cần `54` / `6` / `3322`. Ở nhóm `5×5`, thứ tự thời gian chạy cũng tăng theo `decisions` và `backtracks`: `p02` (`299`, `48`, `4.492s`) đứng trước `p01` (`864`, `121`, `6.674s`) rồi đến `p03` (`1224`, `137`, `8.567s`).
+Trong cùng nhóm `4×4`, `puzzles_4x4/p01.json` có `clauses = 240` (nhỏ hơn `308` của `p02`) và `sat_calls = 163` (nhỏ hơn `201` của `p03`), nhưng `runtime_median` lên tới `0.861s`, hơn gấp đôi `0.372s` của `p02` và `0.388s` của `p03`. Cột `decisions` và `backtracks` khớp với chênh lệch này: `4x4/p01` có `decisions = 358`, `backtracks = 15` và `propagations = 5527`, trong khi `4x4/p02` chỉ có `44` / `0` / `2331` và `4x4/p03` có `54` / `6` / `3322`. Ở nhóm `5×5`, thứ tự thời gian chạy cũng đi cùng chiều với `decisions` và `backtracks`: `p02` (`299`, `48`, `4.492s`) đứng trước `p01` (`864`, `121`, `6.674s`) rồi đến `p03` (`1224`, `137`, `8.567s`).
 
 ### Tỉ lệ `untraced_sat_calls / sat_calls`
 
-Theo `Source/logic/agent.py`, `untraced_sat_calls` gồm các truy vấn ngoài `agent.trace`: lượt `GameEngine.submit_verdict` gọi `LogicAgent.classify` kiểm chứng lại mỗi bước `ACCEPTED` và một truy vấn kiểm tra `KB` ở lượt `next_forced` cuối cùng. Vì `deduction_steps` tăng gần tuyến tính theo số ô úp (trung bình `7.3`, `14.3`, `23.7`), trung bình `untraced_sat_calls` tăng chậm (`20`, `39`, `64`). Trong khi đó, `trace_sat_calls` tăng nhanh hơn theo số ô còn lại cần quét qua từng bước (`35.7`, `126`, `308.3`), làm tỉ lệ `untraced_sat_calls / sat_calls` theo trung bình nhóm giảm dần từ `35.9%` (`3×3`) xuống `23.6%` (`4×4`) và `17.2%` (`5×5`).
+Theo `Source/logic/agent.py`, `untraced_sat_calls` gồm các truy vấn ngoài `agent.trace`: lượt `GameEngine.submit_verdict` gọi `LogicAgent.classify` kiểm chứng lại mỗi bước `ACCEPTED` và một truy vấn kiểm tra `KB` ở lượt `next_forced` cuối cùng. Do `deduction_steps` tăng gần tuyến tính theo số ô úp (trung bình `7.3`, `14.3`, `23.7`), trung bình `untraced_sat_calls` tăng chậm (`20`, `39`, `64`). Trong khi đó, `trace_sat_calls` tăng nhanh hơn theo số ô còn lại cần quét qua từng bước (`35.7`, `126`, `308.3`), nên tỉ lệ `untraced_sat_calls / sat_calls` theo trung bình nhóm giảm từ `35.9%` (`3×3`) xuống `23.6%` (`4×4`) và `17.2%` (`5×5`).
 
 ### `backtracks = 0` trên toàn bộ nhóm `3×3`
 
@@ -81,15 +81,15 @@ Cả 3 bài `3×3` đều có `backtracks = 0` (`3x3/p01` còn có `decisions = 
 | demo_cases/ambiguous.json | 3 | STUCK | MULTIPLE | 9 | 0 | 10 | 17 | 0 | 17 | 0 | 17 | 0 | 0 | 0.004 |
 | demo_cases/inconsistent.json | 3 | INCONSISTENT | UNSAT | 9 | 0 | 11 | 1 | 0 | 1 | 0 | 1 | 0 | 0 | 0.001 |
 
-Trong `demo_cases/ambiguous.json`, cả 9 clue đều là `FACT` khẳng định `A1` là `CRIMINAL`, và ban đầu chỉ `A1` mở (`clauses = 10`). Tám ô còn lại thiếu ràng buộc nên mọi giả định `CRIMINAL` và `INNOCENT` đều cho `SAT`; agent quét 1 lượt (`sat_calls = 17` gồm 1 truy vấn kiểm tra `KB` và `2 × 8` truy vấn giả định), giữ `deduction_steps = 0` và dừng ở `STUCK` với `unique = MULTIPLE`.
+Trong `demo_cases/ambiguous.json`, cả 9 clue đều là `FACT` khẳng định `A1` là `CRIMINAL`. Ban đầu chỉ `A1` mở; cột `clauses = 10` là kích thước KB của toàn bộ clue (9 `FACT` kèm `FACT init_A1`). Tám ô còn lại thiếu ràng buộc nên mọi giả định `CRIMINAL` và `INNOCENT` đều cho `SAT`; agent quét 1 lượt (`sat_calls = 17` gồm 1 truy vấn kiểm tra `KB` và `2 × 8` truy vấn giả định), giữ `deduction_steps = 0` và dừng ở `STUCK` với `unique = MULTIPLE`.
 
 Trong `demo_cases/inconsistent.json`, hai ô mở sẵn `A1` và `B1` mang hai `FACT` trái ngược nhau về `A1` (`CRIMINAL` và `INNOCENT`). Lần kiểm tra `KB` đầu tiên trong `next_forced` trả `UNSAT` ngay ở `sat_calls = 1` (`deduction_steps = 0`), nên agent dừng với `status = INCONSISTENT` và `unique = UNSAT`.
 
-Với `--timeout 30`, cả 9 bài chính đều `SOLVED` nên bảng trên không có dòng `TIMEOUT`. Khi một truy vấn `DPLLSolver.solve` vượt giới hạn thời gian và ném `TimeoutError`, `run_tests.py` vẫn giữ lại dòng `TIMEOUT` kèm số liệu tích lũy đến thời điểm dừng, như đã kiểm trong `Source/tests/test_run_tests.py` (`test_timeout_zero_writes_timeout_rows_for_all_puzzles` và `test_timeout_after_accepted_step_preserves_partial_progress`).
+Với `--timeout 30`, cả 9 bài chính đều `SOLVED` nên bảng trên không có dòng `TIMEOUT`. Khi một truy vấn vượt giới hạn, `DPLLSolver.solve` trả `timed_out = True` và `LogicAgent._query` ném `TimeoutError`; `run_tests.py` vẫn giữ lại dòng `TIMEOUT` kèm bộ đếm tích lũy đến lúc dừng, như đã kiểm trong `Source/tests/test_run_tests.py` (`test_timeout_zero_writes_timeout_rows_for_all_puzzles` và `test_timeout_after_accepted_step_preserves_partial_progress`).
 
 ## 6. Hạn chế
 
 - Mỗi kích thước `3×3`, `4×4`, `5×5` mới có 3 puzzle chuẩn, còn tập demo hiện chỉ có 2 ca lỗi biên từ bước 0 và chưa có ca dừng `STUCK` giữa chừng.
 - Tất cả lần chạy thực hiện trên cùng một máy, nên `runtime_median`, `runtime_min` và `runtime_max` chỉ dùng để so sánh giữa các bài trong cùng bộ đo.
 - Cờ `--timeout` giới hạn từng truy vấn `DPLLSolver.solve` riêng lẻ thay vì tổng thời gian của một puzzle; đồng thời `runtime_sec` trong `run_tests.py` đo trọn từ lúc nạp file đến khi kết thúc `auto_solve`, bao gồm chi phí dựng lại CNF ở từng bước và các truy vấn kiểm chứng của `GameEngine.submit_verdict` (tách riêng `uniqueness_check`).
-- Trong `Source/logic/cnf_encoder.py`, các clue đếm (`AT_MOST`, `AT_LEAST`, `EXACTLY`) liệt kê tổ hợp mệnh đề (`C(m, k+1)` và `C(m, m-k+1)`), còn `COMPARE` tạo `|R|(|R|+1)/2` biến phụ mỗi vùng. Với ca stress `5×5`, KB đạt tới `204` biến phụ và `815` mệnh đề, làm thời gian chạy đạt mức trung vị `8.567s` (`10.071s` ở lần chậm nhất).
+- Trong `Source/logic/cnf_encoder.py`, các clue đếm (`AT_MOST`, `AT_LEAST`, `EXACTLY`) liệt kê tổ hợp mệnh đề (`C(m, k+1)` và `C(m, m-k+1)`), còn `COMPARE` tạo `|R|(|R|+1)/2` biến phụ mỗi vùng. Với ca stress `5×5`, KB đạt tới `204` biến phụ và `815` mệnh đề, đi kèm thời gian chạy trung vị `8.567s` (`10.071s` ở lần chậm nhất).
