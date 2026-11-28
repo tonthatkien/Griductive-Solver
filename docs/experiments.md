@@ -2,7 +2,7 @@
 
 ## 1. Thiết lập thực nghiệm
 
-Tập dữ liệu đo gồm 9 puzzle chuẩn chia đều cho 3 kích thước (`puzzles_3x3/p01..p03.json`, `puzzles_4x4/p01..p03.json`, `puzzles_5x5/p01..p03.json`) và 2 ca demo lỗi cố ý (`demo_cases/ambiguous.json`, `demo_cases/inconsistent.json`) trong `Source/data/`.
+Tập dữ liệu đo gồm 9 puzzle chuẩn chia đều cho 3 kích thước (`puzzles_3x3/p01..p03.json`, `puzzles_4x4/p01..p03.json`, `puzzles_5x5/p01..p03.json`) và các ca lỗi cố ý trong `Source/data/`: `demo_cases/inconsistent.json` cùng 3 bài thiếu manh mối `not_found/not_found_3x3.json`, `not_found_4x4.json`, `not_found_5x5.json` (lấy từ nhánh `fix/bao-f4`, commit `bae27da`). `demo_cases/ambiguous.json` vẫn được chạy và có dòng trong `results_demo.csv`, nhưng bảng failure dùng 3 bài `not_found` cùng loại `STUCK`/`MULTIPLE` thay cho nó.
 
 Các lệnh chạy thực hiện từ thư mục `Source/` với tham số mặc định `--timeout 30` (giới hạn 30 giây cho mỗi truy vấn DPLL):
 
@@ -12,7 +12,7 @@ python experiments/run_tests.py --include-demo --out experiments/results_demo.cs
 python experiments/plots.py
 ```
 
-Bộ chính chạy lặp 5 lần để lấy trung bình và khoảng min-max của `runtime_sec`. Số liệu đo trên cùng mã nguồn solver với `main` (`ca27a46`), lưu tại `Source/experiments/runs/run_1..5.csv` và `Source/experiments/results_demo.csv` ở commit `f4e469a`. Định nghĩa 15 cột CSV xem tại `docs/INTERFACES.md` mục 5.
+Bộ chính chạy lặp 5 lần để lấy trung bình và khoảng min-max của `runtime_sec`. Số liệu đo trên cùng mã nguồn solver với `main` (`ca27a46`), lưu tại `Source/experiments/runs/run_1..5.csv` (commit `f4e469a`) và `Source/experiments/results_demo.csv` (chạy lại sau khi thêm `not_found/`). Định nghĩa 15 cột CSV xem tại `docs/INTERFACES.md` mục 5.
 
 ## 2. Bảng kết quả
 
@@ -78,10 +78,12 @@ Cả 3 bài `3×3` đều có `backtracks = 0` (`3x3/p01` còn có `decisions = 
 
 | puzzle | size | status | unique | primary_vars | aux_vars | clauses | sat_calls | trace_sat_calls | untraced_sat_calls | decisions | propagations | backtracks | deduction_steps | runtime_sec |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| demo_cases/ambiguous.json | 3 | STUCK | MULTIPLE | 9 | 0 | 10 | 17 | 0 | 17 | 0 | 17 | 0 | 0 | 0.004 |
 | demo_cases/inconsistent.json | 3 | INCONSISTENT | UNSAT | 9 | 0 | 11 | 1 | 0 | 1 | 0 | 1 | 0 | 0 | 0.001 |
+| not_found/not_found_3x3.json | 3 | STUCK | MULTIPLE | 9 | 0 | 50 | 15 | 0 | 15 | 24 | 30 | 0 | 0 | 0.006 |
+| not_found/not_found_4x4.json | 4 | STUCK | MULTIPLE | 16 | 0 | 107 | 29 | 0 | 29 | 25 | 58 | 0 | 0 | 0.003 |
+| not_found/not_found_5x5.json | 5 | STUCK | MULTIPLE | 25 | 0 | 134 | 47 | 0 | 47 | 225 | 319 | 0 | 0 | 0.039 |
 
-Trong `demo_cases/ambiguous.json`, cả 9 clue đều là `FACT` khẳng định `A1` là `CRIMINAL`. Ban đầu chỉ `A1` mở; cột `clauses = 10` là kích thước KB của toàn bộ clue (9 `FACT` kèm `FACT init_A1`). Tám ô còn lại thiếu ràng buộc nên mọi giả định `CRIMINAL` và `INNOCENT` đều cho `SAT`; agent quét 1 lượt (`sat_calls = 17` gồm 1 truy vấn kiểm tra `KB` và `2 × 8` truy vấn giả định), giữ `deduction_steps = 0` và dừng ở `STUCK` với `unique = MULTIPLE`.
+Ba bài `not_found` chỉ dùng clue cơ bản và mỗi bài lật sẵn 2 ô. Với KB ban đầu, không ô nào bị ép: agent quét 1 lượt gồm 1 truy vấn kiểm tra `KB` và 2 truy vấn giả định cho mỗi ô còn úp, nên `sat_calls = 1 + 2 × (N² − 2)`, tức `15`, `29`, `47`. Agent giữ `deduction_steps = 0` và dừng ở `STUCK`. Toàn bộ clue của mỗi bài cũng có nhiều nghiệm (`unique = MULTIPLE`), nên kể cả khi mọi thẻ được lật, clue vẫn không đủ để xác định nghiệm. Trong lượt quét này DPLL vẫn rẽ nhánh để tìm model cho các truy vấn `SAT` (`decisions = 24`, `25`, `225`) nhưng không quay lui lần nào (`backtracks = 0`).
 
 Trong `demo_cases/inconsistent.json`, hai ô mở sẵn `A1` và `B1` mang hai `FACT` trái ngược nhau về `A1` (`CRIMINAL` và `INNOCENT`). Lần kiểm tra `KB` đầu tiên trong `next_forced` trả `UNSAT` ngay ở `sat_calls = 1` (`deduction_steps = 0`), nên agent dừng với `status = INCONSISTENT` và `unique = UNSAT`.
 
@@ -89,7 +91,7 @@ Với `--timeout 30`, cả 9 bài chính đều `SOLVED` nên bảng trên khôn
 
 ## 6. Hạn chế
 
-- Mỗi kích thước `3×3`, `4×4`, `5×5` mới có 3 puzzle chuẩn, còn tập demo hiện chỉ có 2 ca dừng ngay từ bước 0 và chưa có ca dừng `STUCK` giữa chừng.
+- Mỗi kích thước `3×3`, `4×4`, `5×5` mới có 3 puzzle chuẩn. Cả 4 ca thất bại trong bảng (3 bài `not_found` và `inconsistent`) đều dừng ngay từ bước 0; chưa có ca `STUCK` sau khi đã chứng minh được một số ô.
 - Tất cả lần chạy thực hiện trên cùng một máy, nên `runtime_mean`, `runtime_min` và `runtime_max` chỉ dùng để so sánh giữa các bài trong cùng bộ đo.
 - Cờ `--timeout` giới hạn từng truy vấn `DPLLSolver.solve` riêng lẻ thay vì tổng thời gian của một puzzle; đồng thời `runtime_sec` trong `run_tests.py` đo trọn từ lúc nạp file đến khi kết thúc `auto_solve`, bao gồm chi phí dựng lại CNF ở từng bước và các truy vấn kiểm chứng của `GameEngine.submit_verdict` (tách riêng `uniqueness_check`).
 - Trong `Source/logic/cnf_encoder.py`, các clue đếm (`AT_MOST`, `AT_LEAST`, `EXACTLY`) liệt kê tổ hợp mệnh đề (`C(m, k+1)` và `C(m, m-k+1)`), còn `COMPARE` tạo `|R|(|R|+1)/2` biến phụ mỗi vùng. Với ca stress `5×5`, KB đạt tới `204` biến phụ và `815` mệnh đề, đi kèm thời gian chạy trung bình `9.124s` (`10.071s` ở lần chậm nhất).

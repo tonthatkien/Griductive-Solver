@@ -210,6 +210,12 @@ class PlotsSummaryFailureAndMarkdownTests(unittest.TestCase):
                         unique="MULTIPLE",
                         deduction_steps=0,
                     ),
+                    _make_row(
+                        puzzle="not_found/not_found_3x3.json",
+                        status="STUCK",
+                        unique="MULTIPLE",
+                        deduction_steps=0,
+                    ),
                 ],
             )
             stdout = io.StringIO()
@@ -230,7 +236,8 @@ class PlotsSummaryFailureAndMarkdownTests(unittest.TestCase):
         self.assertIn("runtime_mean", output)
         self.assertIn("9 (9-9)", output)
         self.assertIn("0 (0-0)", output)
-        self.assertIn("demo_cases/ambiguous.json", output)
+        self.assertIn("not_found/not_found_3x3.json", output)
+        self.assertNotIn("demo_cases/ambiguous.json", output)
         self.assertIn("0.150", output)
 
     def test_cli_without_flags_runs_both_tables_and_figures(self) -> None:
@@ -317,8 +324,10 @@ class PlotsSummaryFailureAndMarkdownTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("puzzles_5x5/p03.json", output)
         self.assertIn("11.7 (0-18)", output)
-        self.assertIn("demo_cases/ambiguous.json", output)
+        for name in ("not_found_3x3", "not_found_4x4", "not_found_5x5"):
+            self.assertIn(f"not_found/{name}.json", output)
         self.assertIn("demo_cases/inconsistent.json", output)
+        self.assertNotIn("demo_cases/ambiguous.json", output)
 
 
 if __name__ == "__main__":

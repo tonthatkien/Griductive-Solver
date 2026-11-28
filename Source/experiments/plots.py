@@ -20,6 +20,9 @@ DEFAULT_DEMO_PATH = EXPERIMENTS_DIR / "results_demo.csv"
 DEFAULT_IMAGE_DIR = EXPERIMENTS_DIR.parent.parent / "docs" / "image"
 
 SOLVED = "SOLVED"
+# ambiguous.json vẫn được chạy (test B6 cần), nhưng bảng failure dùng 3 bài not_found/
+# cùng loại STUCK/MULTIPLE thay cho nó.
+REPLACED_DEMOS = frozenset({"demo_cases/ambiguous.json"})
 
 SIZE_COLORS = {
     3: "#0072B2",
@@ -270,7 +273,10 @@ def render_tables(
     resolved_demo = DEFAULT_DEMO_PATH if demo_path is None else demo_path
     detail = merge_runs(resolved_runs)
     summary = _format_summary_rows(summary_by_size(detail))
-    failures = failure_rows(load_rows(resolved_demo))
+    failures = [
+        row for row in failure_rows(load_rows(resolved_demo))
+        if row.get("puzzle") not in REPLACED_DEMOS
+    ]
     sections = [
         ("Chi tiết từng bài (5 lần chạy)", to_markdown(detail, DETAIL_COLUMNS)),
         ("Tổng hợp theo kích thước", to_markdown(summary, SUMMARY_COLUMNS)),
