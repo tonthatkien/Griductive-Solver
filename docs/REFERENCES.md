@@ -37,7 +37,7 @@ Cột *Người ghi* điền tên người đưa nguồn này vào. Cột *Dùng
 
 | STT | Loại | Tên / Tác giả | Link | Dùng để làm gì | Dùng cho (ID) | Người ghi |
 |---|---|---|---|---|---|---|
-| 11 | Tài liệu thư viện | Pygame Documentation | https://www.pygame.org/docs/ | Xây dựng GUI (nếu nhóm chọn Pygame) | F | |
+| 11 | Tài liệu thư viện | PySide6 (Qt for Python) Documentation – The Qt Company | https://doc.qt.io/qtforpython-6/ | Xây dựng giao diện đồ họa người dùng (GUI), custom painting (`QPainter`), animation, QSS và âm thanh (`QtMultimedia`) | F (F1–F5) | Bảo |
 
 ## Fonts (GUI)
 
@@ -56,7 +56,7 @@ Cột *Người ghi* điền tên người đưa nguồn này vào. Cột *Dùng
 
 > Hình nhân vật Detective Conan có bản quyền của chủ sở hữu (tác giả Gosho Aoyama và các đơn vị phát hành). Ghi rõ nguồn từng ảnh; nếu nộp hoặc công khai sản phẩm thì nêu mục đích học tập, phi thương mại.
 
-| STT | Loại | Tên / Tác giả | Link | Dùng để làm gì | Dùng cho (ID) | Người ghi |
+| STT | Loại | Tên / Tác giả | Nguồn | Dùng để làm gì | Dùng cho (ID) | Người ghi |
 |---|---|---|---|---|---|---|
 | 18 | Hình ảnh | Ảnh chân dung 17 nhân vật `gui/assets/characters/*.png` (akai, amuro, chiba, conan, jodie, kaito, makoto, megure, ran, sato, shinichi, shiratori, sonoko, subaru, takagi, yukiko, yusaku) | Pinterest | Chân dung trên thẻ nghi phạm | F1 | Bảo |
 | 19 | Hình ảnh | Ảnh Conan (`conan_happy`, `conan_neutral`, `conan_shake`, `conan_shock`, `conan_think`) và bóng đen hung thủ (`villain`) trong `gui/assets/icons/` | Pinterest | Avatar Conan trong bong bóng thoại và ảnh hung thủ trên trang chủ | F | Bảo |
