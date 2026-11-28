@@ -3,6 +3,10 @@
 Chạy từ thư mục Source/:
     python experiments/run_tests.py
 
+Script chạy các bài trong `data/puzzles_*/` rồi đến `data/not_found/` (các bài
+cố ý mơ hồ để demo solver không giải ra, thường cho `STUCK` và `unique=MULTIPLE`).
+Các bài `not_found` được xếp cuối bảng và vẫn ghi đầy đủ như mọi bài khác.
+
 Tham số `--timeout` giới hạn thời gian (giây) cho từng truy vấn DPLL; mỗi bài
 có thể gọi DPLL nhiều lần. Cột `status` ghi một trong năm giá trị: `SOLVED`,
 `STUCK`, `INCONSISTENT`, `TIMEOUT`, `ERROR`. Khi một bài gặp lỗi hoặc hết giờ,
@@ -97,8 +101,10 @@ def _puzzle_sort_key(path: Path) -> tuple[int, int, str, str]:
 
 
 def discover(data_dir: Path | str) -> list[Path]:
-    """Trả danh sách file puzzle sắp theo kích thước rồi theo tên file."""
-    paths = [p for p in Path(data_dir).glob("puzzles_*/*.json") if p.is_file()]
+    """Trả danh sách file puzzle: `puzzles_*` theo kích thước rồi tên file, `not_found/` xếp cuối."""
+    root = Path(data_dir)
+    paths = [p for p in root.glob("puzzles_*/*.json") if p.is_file()]
+    paths += [p for p in root.glob("not_found/*.json") if p.is_file()]
     return sorted(paths, key=_puzzle_sort_key)
 
 
@@ -236,7 +242,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description="Chạy thực nghiệm solver trên bộ puzzle.")
     parser.add_argument(
-        "--data", type=Path, default=DEFAULT_DATA_DIR, help="Thư mục chứa puzzles_*"
+        "--data", type=Path, default=DEFAULT_DATA_DIR,
+        help="Thư mục chứa puzzles_* và not_found",
     )
     parser.add_argument(
         "--out", type=Path, default=DEFAULT_OUT_PATH, help="Đường dẫn file CSV kết quả"

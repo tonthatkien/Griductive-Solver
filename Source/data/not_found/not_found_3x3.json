@@ -1,0 +1,137 @@
+{
+ "n": 3,
+ "title": "Vụ án mất tích ở nhà Tiến sĩ Agasa (không đủ manh mối)",
+ "characters": [
+  {
+   "cell": "A1",
+   "name": "Agasa",
+   "profession": "Nhà phát minh",
+   "criminal": true,
+   "clue": {
+    "type": "AT_LEAST",
+    "region": {
+     "type": "neighbors",
+     "cell": "B2"
+    },
+    "k": 3,
+    "status": "CRIMINAL"
+   }
+  },
+  {
+   "cell": "B1",
+   "name": "Ai",
+   "profession": "Nhà khoa học",
+   "criminal": false,
+   "clue": {
+    "type": "AT_LEAST",
+    "region": {
+     "type": "col",
+     "letter": "A"
+    },
+    "k": 0,
+    "status": "CRIMINAL"
+   }
+  },
+  {
+   "cell": "C1",
+   "name": "Ayumi",
+   "profession": "Học sinh",
+   "criminal": false,
+   "clue": {
+    "type": "AT_LEAST",
+    "region": {
+     "type": "col",
+     "letter": "A"
+    },
+    "k": 2,
+    "status": "CRIMINAL"
+   }
+  },
+  {
+   "cell": "A2",
+   "name": "Genta",
+   "profession": "Học sinh",
+   "criminal": true,
+   "clue": {
+    "type": "FACT",
+    "target": "C2",
+    "status": "CRIMINAL"
+   }
+  },
+  {
+   "cell": "B2",
+   "name": "Heiji",
+   "profession": "Thám tử",
+   "criminal": false,
+   "clue": {
+    "type": "EXACTLY",
+    "region": {
+     "type": "col",
+     "letter": "B"
+    },
+    "k": 0,
+    "status": "CRIMINAL"
+   }
+  },
+  {
+   "cell": "C2",
+   "name": "Kazuha",
+   "profession": "Võ sĩ Aikido",
+   "criminal": true,
+   "clue": {
+    "type": "AT_MOST",
+    "region": {
+     "type": "neighbors",
+     "cell": "B3"
+    },
+    "k": 2,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "A3",
+   "name": "Kogoro",
+   "profession": "Thám tử tư",
+   "criminal": false,
+   "clue": {
+    "type": "AT_LEAST",
+    "region": {
+     "type": "neighbors",
+     "cell": "A3"
+    },
+    "k": 1,
+    "status": "CRIMINAL"
+   }
+  },
+  {
+   "cell": "B3",
+   "name": "Mitsuhiko",
+   "profession": "Học sinh",
+   "criminal": false,
+   "clue": {
+    "type": "AT_MOST",
+    "region": {
+     "type": "row",
+     "number": 3
+    },
+    "k": 2,
+    "status": "INNOCENT"
+   }
+  },
+  {
+   "cell": "C3",
+   "name": "Ran",
+   "profession": "Nhà vô địch Karate",
+   "criminal": true,
+   "clue": {
+    "type": "FACT",
+    "target": "B1",
+    "status": "INNOCENT"
+   }
+  }
+ ],
+ "initially_revealed": [
+  "A1",
+  "B1"
+ ]
+}
