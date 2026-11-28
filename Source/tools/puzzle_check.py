@@ -45,7 +45,8 @@ def semantic_count(clues: tuple[Clue, ...], n: int) -> int:
     ready: list[list[Clue]] = [[] for _ in cells]
     order = {cell: i for i, cell in enumerate(cells)}
     for clue in clues:
-        last = max(order[cell] for cell in clue_cells(clue, n))
+        # Clue không nhắc ô nào (NOISE) được kiểm ngay ở bước đầu; luôn đúng.
+        last = max((order[cell] for cell in clue_cells(clue, n)), default=0)
         ready[last].append(clue)
     smoke = dict.fromkeys(cells, False)
     for clue in clues:

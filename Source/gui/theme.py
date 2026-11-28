@@ -24,16 +24,22 @@ NIGHT_BOTTOM = "#1b3157"
 
 FONT_DIR = Path(__file__).resolve().parent / "assets" / "fonts"
 FONT_STACKS: Dict[str, List[str]] = {
+    "display": ["Orbitron", "Bahnschrift", "Segoe UI", "Arial", "sans-serif"],   # chữ game (ASCII)
+    "clue_title": ["Tektur", "Segoe UI", "Arial", "sans-serif"],
+    "clue_body": ["Be Vietnam Pro", "Segoe UI", "Arial", "sans-serif"],
     "title": ["Cinzel", "Trajan Pro", "Georgia", "Times New Roman", "serif"],
     "gadget": ["Orbitron", "Bahnschrift", "Segoe UI", "Arial", "sans-serif"],
     "dossier": ["Courier Prime", "Courier New", "Cousine", "Courier", "monospace"],
     "mono": ["Share Tech Mono", "Consolas", "Menlo", "DejaVu Sans Mono", "Courier New", "monospace"],
 }
 # Giá trị mặc định; init_fonts() cập nhật theo font thực sự có trên máy.
+FONT_DISPLAY = FONT_STACKS["display"][0]
 FONT_TITLE = FONT_STACKS["title"][0]
 FONT_GADGET = FONT_STACKS["gadget"][0]
 FONT_DOSSIER = FONT_STACKS["dossier"][0]
 FONT_MONO = FONT_STACKS["mono"][0]
+FONT_CLUE_TITLE = FONT_STACKS["clue_title"][0]
+FONT_CLUE_BODY = FONT_STACKS["clue_body"][0]
 
 
 def init_fonts() -> Dict[str, str]:
@@ -41,7 +47,7 @@ def init_fonts() -> Dict[str, str]:
 
     Phải gọi SAU khi tạo QApplication và TRƯỚC build_qss(). Trả về {lớp: tên font}.
     """
-    global FONT_TITLE, FONT_GADGET, FONT_DOSSIER, FONT_MONO
+    global FONT_DISPLAY, FONT_TITLE, FONT_GADGET, FONT_DOSSIER, FONT_MONO, FONT_CLUE_TITLE, FONT_CLUE_BODY
     from PySide6.QtGui import QFontDatabase
     if FONT_DIR.is_dir():
         for path in sorted(FONT_DIR.iterdir()):
@@ -50,9 +56,24 @@ def init_fonts() -> Dict[str, str]:
     installed = {name.lower(): name for name in QFontDatabase.families()}
     resolved = {layer: next((installed[n.lower()] for n in stack if n.lower() in installed), stack[-1])
                 for layer, stack in FONT_STACKS.items()}
+    FONT_DISPLAY = resolved["display"]
     FONT_TITLE, FONT_GADGET = resolved["title"], resolved["gadget"]
     FONT_DOSSIER, FONT_MONO = resolved["dossier"], resolved["mono"]
+    FONT_CLUE_TITLE, FONT_CLUE_BODY = resolved["clue_title"], resolved["clue_body"]
     return resolved
+
+
+def display(text: str) -> str:
+    """Font game (Orbitron) nếu chuỗi chỉ gồm ASCII; có dấu tiếng Việt thì dùng Tektur (đủ glyph).
+
+    Cinzel và Orbitron không có đủ ký tự tiếng Việt (Ả, Ề, Ệ...), nên không dùng cho chuỗi có dấu.
+    """
+    return FONT_DISPLAY if text.isascii() else FONT_CLUE_TITLE
+
+
+def mono(text: str) -> str:
+    """Font mono (Share Tech Mono) nếu chuỗi chỉ gồm ASCII; có dấu tiếng Việt thì dùng Tektur (đủ glyph)."""
+    return FONT_MONO if text.isascii() else FONT_CLUE_TITLE
 
 
 def supports_vietnamese(family: str) -> bool:
@@ -73,10 +94,6 @@ QLabel#coord {{ color: {CYAN_LASER}; font-family: "{FONT_MONO}"; font-size: 16px
 QFrame#notebookCover {{
     background: qlineargradient(x1:0,y1:0,x2:1,y2:1, stop:0 #17233b, stop:1 #0b1222);
     border: 1.5px solid #2d4373; border-radius: 12px;
-}}
-QLabel#statchip {{
-    background: #10192e; border: 1px solid #2b3f6b; border-radius: 8px;
-    color: #e6eefc; font-family: "{FONT_MONO}"; font-size: 12px; padding: 5px 4px;
 }}
 QTextBrowser#notebook {{
     background: #0d1526; color: #dce6f7; border: 1px solid #253861; border-radius: 8px;

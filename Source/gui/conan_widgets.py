@@ -86,7 +86,7 @@ class ConanToast(ConanWidget):
 
     def _target(self) -> QPoint:
         parent = self.parentWidget()
-        return QPoint(parent.width() - self.width() - 24, parent.height() - self.height() - 150)
+        return QPoint(parent.width() - self.width() - 24, parent.height() - self.height() - 24)
 
     def popup(self, text: str, mood: str = "shake", ms: int = 2800) -> None:
         self.say(text, mood)

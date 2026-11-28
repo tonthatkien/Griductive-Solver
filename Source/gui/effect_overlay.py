@@ -83,7 +83,7 @@ class EffectOverlay(QWidget):
         icons.draw_villain(p, rect, alpha)
         title = QRectF(0, h * 0.1, w, h * 0.1)
         draw_neon_text(p, title, "SUY LUẬN NGƯỢC LOGIC!",
-                       make_font(theme.FONT_TITLE, h * 0.07, True, spacing=5),
+                       make_font(theme.FONT_CLUE_TITLE, h * 0.07, True, spacing=5),
                        "#ff6b78", theme.RED_NEON, 1.0, ALIGN_CENTER, alpha)
         p.setFont(make_font(theme.FONT_DOSSIER, h * 0.03, False, True))
         p.setPen(QColor(255, 255, 255, alpha))
@@ -91,7 +91,7 @@ class EffectOverlay(QWidget):
 
     def _paint_victory(self, p: QPainter, t: float) -> None:
         w, h = float(self.width()), float(self.height())
-        p.fillRect(self.rect(), QColor(4, 10, 28, int(220 * min(1.0, t * 3))))
+        p.fillRect(self.rect(), QColor(4, 10, 28, int(150 * min(1.0, t * 3))))
         spot = QRadialGradient(QPointF(w / 2, h * 0.45), h * 0.6)
         spot.setColorAt(0, QColor(255, 230, 150, 80))
         spot.setColorAt(1, QColor(255, 230, 150, 0))
@@ -105,7 +105,7 @@ class EffectOverlay(QWidget):
         bob = math.sin(t * 12) * 4
         icons.draw_conan(p, QRectF(w / 2 - face / 2, h * 0.12 + bob, face, face), "happy")
         text, px = "SỰ THẬT CHỈ CÓ MỘT!", h * 0.085
-        font = make_font(theme.FONT_TITLE, px, True, spacing=6)
+        font = make_font(theme.FONT_CLUE_TITLE, px, True, spacing=6)
         p.setFont(font)
         full = p.fontMetrics().horizontalAdvance(text)
         shown = text[: int(len(text) * min(1.0, t * 2.2)) + 1]

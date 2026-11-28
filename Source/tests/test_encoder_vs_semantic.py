@@ -59,6 +59,11 @@ class EncoderVsSemanticTest(unittest.TestCase):
         for status in STATUSES:
             self.assert_agree(mk("FACT", target="B2", status=status))
 
+    def test_noise_is_true_and_encodes_to_nothing(self):
+        clue = mk("NOISE", text="Tôi thích trồng hoa.")
+        self.assertEqual(Encoder(N).encode_clue(clue), [])
+        self.assert_agree(clue)
+
     def test_same_and_different_status(self):
         for clue_type in ("SAME_STATUS", "DIFFERENT_STATUS"):
             with self.subTest(type=clue_type):

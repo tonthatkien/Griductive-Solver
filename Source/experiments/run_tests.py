@@ -3,6 +3,10 @@
 Chạy từ thư mục Source/:
     python experiments/run_tests.py
 
+Script chạy các bài trong `data/puzzles_*/` rồi đến `data/not_found/` (các bài
+cố ý mơ hồ để demo solver không giải ra, thường cho `STUCK` và `unique=MULTIPLE`).
+Các bài `not_found` được xếp cuối bảng và vẫn ghi đầy đủ như mọi bài khác.
+
 Tham số `--timeout` giới hạn thời gian (giây) cho từng truy vấn DPLL; mỗi bài
 có thể gọi DPLL nhiều lần. Cờ `--include-demo` chạy thêm các file trong
 `demo_*/*.json` và `not_found/*.json` sau bộ puzzle chính (mặc định bỏ qua).

@@ -28,7 +28,11 @@ class NeonTitle(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
     def _font(self) -> QFont:
-        family = theme.FONT_GADGET if self._gadget else theme.FONT_TITLE
+        # Cinzel/Orbitron thiếu glyph tiếng Việt: chữ có dấu dùng Tektur, chữ ASCII giữ font cũ
+        if self._text.isascii():
+            family = theme.FONT_GADGET if self._gadget else theme.FONT_TITLE
+        else:
+            family = theme.FONT_CLUE_TITLE
         return make_font(family, self._px, True, spacing=self._spacing)
 
     def sizeHint(self) -> QSize:

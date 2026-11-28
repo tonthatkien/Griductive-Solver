@@ -54,6 +54,9 @@ class ClueCellsTest(unittest.TestCase):
     def test_owner_is_not_included_unless_mentioned(self):
         self.assertNotIn("A1", clue_cells(mk("EXACTLY", owner="A1", region=NEI_A1, k=1), N))
 
+    def test_noise_references_no_cells(self):
+        self.assertEqual(clue_cells(mk("NOISE", text="Tôi thích trồng hoa."), N), [])
+
     def test_unknown_type_raises(self):
         with self.assertRaises(ValueError):
             clue_cells(mk("BOGUS"), N)
@@ -70,6 +73,7 @@ class ValidateClueValidTest(unittest.TestCase):
             mk("AT_MOST", region=NEI_A1, k=2),
             mk("PARITY", region=ROW2, parity="EVEN"),
             mk("COMPARE", region1=ROW2, region2=COLB, op="LE"),
+            mk("NOISE", text="Tôi thích trồng hoa."),
         ]
         for clue in good:
             with self.subTest(type=clue.type):
@@ -102,6 +106,12 @@ class ValidateClueValidTest(unittest.TestCase):
                 validate_clue(clue, N)
                 with self.assertRaises(ValueError):
                     clue_status(clue)
+
+    def test_noise_has_no_status_and_clue_status_rejects_it(self):
+        clue = mk("NOISE", text="Tôi thích trồng hoa.")
+        validate_clue(clue, N)
+        with self.assertRaises(ValueError):
+            clue_status(clue)
 
     def test_clue_status_fact_returns_given_status(self):
         self.assertEqual(clue_status(mk("FACT", target="A1", status="INNOCENT")), "INNOCENT")
@@ -214,6 +224,12 @@ class ValidateClueInvalidTest(unittest.TestCase):
 
     def test_unknown_region_type(self):
         self.assert_invalid(mk("EXACTLY", region={"type": "diagonal"}, k=0))
+
+    def test_noise_requires_non_empty_string_text(self):
+        for bad in ("", "   ", 5, None, ["x"]):
+            with self.subTest(text=bad):
+                self.assert_invalid(mk("NOISE", text=bad))
+        self.assert_invalid(mk("NOISE"))
 
     def test_parity_bad_value(self):
         self.assert_invalid(mk("PARITY", region=ROW2, parity="even"))

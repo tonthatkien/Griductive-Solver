@@ -37,7 +37,7 @@ Cột *Người ghi* điền tên người đưa nguồn này vào. Cột *Dùng
 
 | STT | Loại | Tên / Tác giả | Link | Dùng để làm gì | Dùng cho (ID) | Người ghi |
 |---|---|---|---|---|---|---|
-| 11 | Tài liệu thư viện | Pygame Documentation | https://www.pygame.org/docs/ | Xây dựng GUI (nếu nhóm chọn Pygame) | F | |
+| 11 | Tài liệu thư viện | PySide6 (Qt for Python) Documentation – The Qt Company | https://doc.qt.io/qtforpython-6/ | Xây dựng giao diện đồ họa người dùng (GUI), custom painting (`QPainter`), animation, QSS và âm thanh (`QtMultimedia`) | F (F1–F5) | Bảo |
 
 ## Fonts (GUI)
 
@@ -49,14 +49,25 @@ Cột *Người ghi* điền tên người đưa nguồn này vào. Cột *Dùng
 | 13 | Font | Courier Prime (Alan Dague-Greene, Quote-Unquote Apps), file: Regular, Italic, Bold, BoldItalic. Giấy phép SIL OFL 1.1 | https://fonts.google.com/specimen/Courier+Prime | Font monospace cho nội dung clue, KB, log | F | |
 | 14 | Font | Orbitron (Matt McInerney), file: Regular, Medium, SemiBold, Bold, ExtraBold, Black và bản VariableFont_wght. Giấy phép SIL OFL 1.1 | https://fonts.google.com/specimen/Orbitron | Font số / nhãn kiểu công nghệ trong giao diện | F | |
 | 15 | Font | Share Tech Mono (Carrois Apostrophe), file: Regular. Giấy phép SIL OFL 1.1 | https://fonts.google.com/specimen/Share+Tech+Mono | Font monospace cho thông số, số liệu (thống kê solver) | F | |
+| 16 | Font | Be Vietnam Pro (Lâm Bảo, Tony Le, ViệtAnh Nguyễn), file `BeVietnamPro-Regular.ttf`. Giấy phép SIL OFL 1.1 | https://fontsource.org/fonts/be-vietnam-pro/about (nguồn gốc: https://github.com/bettergui/BeVietnamPro) | Chữ nội dung manh mối và các dòng thông báo có dấu tiếng Việt (Cinzel, Orbitron không đủ glyph) | F | Bảo |
+| 17 | Font | Tektur (Adam Jagosz), file `Tektur-Regular.ttf`. Giấy phép SIL OFL 1.1 | https://fontsource.org/fonts/tektur/about (nguồn gốc: https://github.com/hyvyys/Tektur) | Tiêu đề và nhãn có dấu tiếng Việt thay cho Orbitron/Cinzel (xem `theme.display()`) | F | Bảo |
+
+## Hình ảnh (GUI)
+
+> Hình nhân vật Detective Conan có bản quyền của chủ sở hữu (tác giả Gosho Aoyama và các đơn vị phát hành). Ghi rõ nguồn từng ảnh; nếu nộp hoặc công khai sản phẩm thì nêu mục đích học tập, phi thương mại.
+
+| STT | Loại | Tên / Tác giả | Nguồn | Dùng để làm gì | Dùng cho (ID) | Người ghi |
+|---|---|---|---|---|---|---|
+| 18 | Hình ảnh | Ảnh chân dung 17 nhân vật `gui/assets/characters/*.png` (akai, amuro, chiba, conan, jodie, kaito, makoto, megure, ran, sato, shinichi, shiratori, sonoko, subaru, takagi, yukiko, yusaku) | Pinterest | Chân dung trên thẻ nghi phạm | F1 | Bảo |
+| 19 | Hình ảnh | Ảnh Conan (`conan_happy`, `conan_neutral`, `conan_shake`, `conan_shock`, `conan_think`) và bóng đen hung thủ (`villain`) trong `gui/assets/icons/` | Pinterest | Avatar Conan trong bong bóng thoại và ảnh hung thủ trên trang chủ | F | Bảo |
 
 ## Âm thanh (GUI)
 
 | STT | Loại | Tên / Tác giả | Link | Dùng để làm gì | Dùng cho (ID) | Người ghi |
 |---|---|---|---|---|---|---|
-| 16 | Nhạc nền | `bgm.ogg`: *Detective Conan Main Theme* (album *Detective Conan - OST 1*), Katsuo Ohno Band | https://archive.org/details/DetectiveConanOriginalSountrack1/01+-+Detective+Conan+Main+Theme.mp3 | Nhạc nền của giao diện | F | |
-| 17 | Âm thanh | `click.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi click chuột | F | |
-| 18 | Âm thanh | `clue.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi chọn / hiện clue | F | |
-| 20 | Âm thanh | `hint.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi dùng gợi ý | F | |
-| 22 | Âm thanh | `radial.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi mở menu radial | F | |
-| 23 | Âm thanh | `step.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi solver chạy từng bước | F | |
+| 20 | Âm thanh | `click.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi click chuột | F | |
+| 21 | Âm thanh | `clue.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi chọn / hiện clue | F | |
+| 22 | Âm thanh | `hint.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi dùng gợi ý | F | |
+| 23 | Âm thanh | `radial.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi mở menu radial | F | |
+| 24 | Âm thanh | `step.wav`, tải từ Mixkit (Mixkit Sound Effects Free License) | https://mixkit.co/free-sound-effects/ | Âm thanh khi solver chạy từng bước | F | |
+| 25 | Nhạc nền |`bgm.ogg`, `level_01.ogg` … `level_09.ogg`  | https://archive.org/details/DetectiveConanOriginalSountrack1 | Nhạc nền theo màn chơi (`gui/sound.py`, `gui/levels.py`) | F | Bảo |

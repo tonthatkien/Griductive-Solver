@@ -233,5 +233,28 @@ class TestEncodeCountingClues(unittest.TestCase):
             Encoder(3).encode_clue(make_clue("AT_MOST", region=region, k=1))
 
 
+class TestEncodeNoiseClue(unittest.TestCase):
+    """NOISE luôn đúng nên không sinh clause và không tốn biến phụ."""
+
+    def test_noise_encodes_to_no_clauses(self):
+        clue = make_clue("NOISE", text="Tôi thích trồng hoa.")
+        self.assertEqual(Encoder(3).encode_clue(clue), [])
+
+    def test_noise_uses_no_aux_vars_and_keeps_numbering(self):
+        enc = Encoder(3)
+        enc.encode_clue(make_clue("PARITY", region=ROW2, parity="ODD"))  # 1 biến phụ
+        enc.encode_clue(make_clue("NOISE", text="Tôi thích trồng hoa."))
+        self.assertEqual(enc.num_aux, 1)
+        self.assertEqual(enc.new_aux(), 11)
+
+    def test_noise_without_text_raises_before_encoding(self):
+        for params in ({}, {"text": ""}, {"text": 5}):
+            with self.subTest(params=params):
+                enc = Encoder(3)
+                with self.assertRaises(ValueError):
+                    enc.encode_clue(make_clue("NOISE", **params))
+                self.assertEqual(enc.num_aux, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

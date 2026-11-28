@@ -14,6 +14,7 @@ from logic.semantic import (
     eval_different_status,
     eval_exactly,
     eval_fact,
+    eval_noise,
     eval_parity,
     eval_same_status,
     evaluate,
@@ -724,6 +725,30 @@ class TestSemanticEvaluator(unittest.TestCase):
             },
         )
         self.assertTrue(evaluate(clue_compare, self.assignment, self.n))
+
+    def test_eval_noise_is_always_true(self):
+        clue = {"type": "NOISE", "text": "Tôi thích trồng hoa."}
+        flipped = {cell: not value for cell, value in self.assignment.items()}
+        self.assertTrue(eval_noise(clue, self.assignment, self.n))
+        self.assertTrue(evaluate(clue, self.assignment, self.n))
+        self.assertTrue(evaluate(clue, flipped, self.n))
+        self.assertTrue(evaluate(clue, {}, self.n))  # không đọc assignment
+        as_object = Clue(id="clue_A1", owner="A1", type="NOISE", params={"text": "x"})
+        self.assertTrue(evaluate(as_object, self.assignment, self.n))
+
+    def test_eval_noise_rejects_missing_or_empty_text(self):
+        for bad in ({"type": "NOISE"}, {"type": "NOISE", "text": ""},
+                    {"type": "NOISE", "text": "   "}, {"type": "NOISE", "text": 5}):
+            with self.subTest(clue=bad):
+                with self.assertRaises(ValueError):
+                    evaluate(bad, self.assignment, self.n)
+
+    def test_evaluate_all_ignores_noise_clues(self):
+        noise = {"type": "NOISE", "text": "Tôi thích trồng hoa."}
+        true_fact = {"type": "FACT", "target": "A1", "status": "CRIMINAL"}
+        false_fact = {"type": "FACT", "target": "B1", "status": "CRIMINAL"}
+        self.assertTrue(evaluate_all([noise, true_fact], self.assignment, self.n))
+        self.assertFalse(evaluate_all([noise, false_fact], self.assignment, self.n))
 
     def test_evaluate_rejects_non_string_clue_type(self):
         bad_types = [["FACT"], 123, True, False, None, {"nested": "FACT"}]

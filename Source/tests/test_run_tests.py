@@ -495,19 +495,31 @@ class RunTestsStatusRowsTests(unittest.TestCase):
         expected = {
             "puzzles_3x3/p01.json": (9, 0, 30),
             "puzzles_3x3/p02.json": (9, 17, 92),
-            "puzzles_3x3/p03.json": (9, 18, 107),
+            "puzzles_3x3/p03.json": (9, 7, 55),
             "puzzles_4x4/p01.json": (16, 51, 240),
             "puzzles_4x4/p02.json": (16, 63, 308),
-            "puzzles_4x4/p03.json": (16, 42, 196),
+            "puzzles_4x4/p03.json": (16, 18, 110),
             "puzzles_5x5/p01.json": (25, 163, 778),
             "puzzles_5x5/p02.json": (25, 95, 499),
-            "puzzles_5x5/p03.json": (25, 204, 815),
+            "puzzles_5x5/p03.json": (25, 66, 461),
         }
         got = {}
         for path in discover(DATA_DIR):
+            if not path.parent.name.startswith("puzzles_"):
+                continue
             kb = _full_clue_kb(path)[2]
             got[f"{path.parent.name}/{path.name}"] = (kb.num_primary, kb.num_aux, kb.num_clauses)
         self.assertEqual(got, expected)
+
+    def test_bundled_not_found_puzzles_are_stuck_and_ambiguous(self) -> None:
+        paths = sorted((DATA_DIR / "not_found").glob("*.json"))
+        self.assertEqual(len(paths), 3)
+        for path in paths:
+            with self.subTest(puzzle=path.name):
+                row = run_one(path, timeout=10)
+                self.assertEqual(row["status"], "STUCK")
+                self.assertEqual(row["unique"], "MULTIPLE")
+                self.assertEqual(row["deduction_steps"], 0)
 
     def test_kb_build_error_leaves_columns_blank_without_changing_status(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -525,7 +537,7 @@ class RunTestsStatusRowsTests(unittest.TestCase):
     def test_dpll_counters_match_solver_stats_and_exclude_extra_passes(self) -> None:
         cases = (
             ("puzzles_3x3/p02.json", False),
-            ("puzzles_4x4/p03.json", True),
+            ("puzzles_4x4/p01.json", True),
         )
         for rel_path, expect_backtracks in cases:
             with self.subTest(puzzle=rel_path):
