@@ -89,7 +89,7 @@ Với `--timeout 30`, cả 9 bài chính đều `SOLVED` nên bảng trên khôn
 
 ## 6. Hạn chế
 
-- Mỗi kích thước `3×3`, `4×4`, `5×5` mới có 3 puzzle chuẩn, còn tập demo hiện chỉ có 2 ca lỗi biên từ bước 0 và chưa có ca dừng `STUCK` giữa chừng.
+- Mỗi kích thước `3×3`, `4×4`, `5×5` mới có 3 puzzle chuẩn, còn tập demo hiện chỉ có 2 ca dừng ngay từ bước 0 và chưa có ca dừng `STUCK` giữa chừng.
 - Tất cả lần chạy thực hiện trên cùng một máy, nên `runtime_median`, `runtime_min` và `runtime_max` chỉ dùng để so sánh giữa các bài trong cùng bộ đo.
 - Cờ `--timeout` giới hạn từng truy vấn `DPLLSolver.solve` riêng lẻ thay vì tổng thời gian của một puzzle; đồng thời `runtime_sec` trong `run_tests.py` đo trọn từ lúc nạp file đến khi kết thúc `auto_solve`, bao gồm chi phí dựng lại CNF ở từng bước và các truy vấn kiểm chứng của `GameEngine.submit_verdict` (tách riêng `uniqueness_check`).
 - Trong `Source/logic/cnf_encoder.py`, các clue đếm (`AT_MOST`, `AT_LEAST`, `EXACTLY`) liệt kê tổ hợp mệnh đề (`C(m, k+1)` và `C(m, m-k+1)`), còn `COMPARE` tạo `|R|(|R|+1)/2` biến phụ mỗi vùng. Với ca stress `5×5`, KB đạt tới `204` biến phụ và `815` mệnh đề, đi kèm thời gian chạy trung vị `8.567s` (`10.071s` ở lần chậm nhất).
