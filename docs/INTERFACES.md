@@ -298,3 +298,20 @@ Cấu trúc trả về của `DPLLSolver().solve(...)` là `SolveResult(sat, mod
 
 **Lưu ý cho module gọi DPLL (`logic.agent`):**
 Không đánh đồng `sat=False` là `UNSAT`. Module gọi phải kiểm tra cờ `timed_out` trước. Nếu `result.timed_out == True`, hệ thống đang ở trạng thái `TIMEOUT` (không được kết luận là mâu thuẫn để tránh suy diễn sai thành khẳng định).
+
+
+## 5. Cột của `experiments/results.csv` (G2)
+
+`experiments/run_tests.py` ghi mỗi puzzle một dòng, kể cả dòng `STUCK`, `INCONSISTENT`, `TIMEOUT`, `ERROR`. Report (H5) dùng đúng các định nghĩa sau:
+
+| Cột | Định nghĩa |
+|---|---|
+| `status` | `SOLVED`, `STUCK`, `INCONSISTENT`, `TIMEOUT` hoặc `ERROR` theo `LogicAgent.solve_status`; lỗi khác ghi `ERROR` |
+| `unique` | Kết quả `uniqueness_check` trên toàn bộ clue kèm `FACT init_<cell>` cho ô `initially_revealed`: `UNIQUE`, `MULTIPLE`, `UNSAT`, `TIMEOUT` hoặc `ERROR`. Chạy riêng, không cộng vào các cột SAT/DPLL và `runtime_sec` |
+| `primary_vars`, `aux_vars`, `clauses` | `num_primary`, `num_aux`, `num_clauses` của `Encoder(n).build_kb` (C6) trên cùng tập clue mà `uniqueness_check` nhận (mọi clue + `FACT init_<cell>`). Đây là kích thước encoding của puzzle, không phụ thuộc agent dừng ở đâu. Để trống nếu không đọc được file hoặc `build_kb` lỗi |
+| `sat_calls` | Số lần `LogicAgent` gọi `DPLLSolver.solve`, gồm truy vấn kiểm chứng của engine, lần kiểm tra KB cuối và truy vấn bị timeout |
+| `trace_sat_calls` | Tổng số truy vấn ghi trong `agent.trace` |
+| `untraced_sat_calls` | `sat_calls - trace_sat_calls` |
+| `decisions`, `propagations`, `backtracks` | Cộng `SolverStats` (D4) qua mọi truy vấn trong `sat_calls`. `decisions`: số lần chọn biến rẽ nhánh; `propagations`: số literal gán qua unit clause, không tính assumption; `backtracks`: số nhánh trả UNSAT |
+| `deduction_steps` | Số bước `ACCEPTED` trong `agent.trace`. Mỗi bước lật đúng một clue, nên cột này thay cho "reveal waves" mà đề cho chọn |
+| `runtime_sec` | Thời gian nạp puzzle và chạy `auto_solve` (giây) |

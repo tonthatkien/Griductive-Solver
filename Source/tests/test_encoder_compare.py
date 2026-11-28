@@ -1,4 +1,4 @@
-"""Test cho Extension 2 COMPARE: CNF phải khớp semantic.evaluate trên mọi phép gán."""
+"""Test cho encode COMPARE: CNF phải khớp semantic.evaluate trên mọi phép gán."""
 import itertools
 import random
 import unittest
@@ -17,12 +17,12 @@ REGIONS = {
     "nei_A1": {"type": "neighbors", "cell": "A1"},
     "one_cell": {"type": "list", "cells": ["C3"]},
 }
-EMPTY_REGION = {"type": "list", "cells": []}   # không hợp lệ, chỉ dùng test bị từ chối
+EMPTY_REGION = {"type": "list", "cells": []}     # không hợp lệ, chỉ dùng test bị từ chối
 
 PAIRS = [("row1", "colA"), ("nei_B2", "row1"), ("nei_A1", "nei_B2"),
-         ("one_cell", "colA"), ("row1", "row1"),
-         ("one_cell", "one_cell"),   # biên: hai vùng 1 ô, EQ với chính nó
-         ("row1", "one_cell")]       # biên: vùng 1 ô làm vế phải
+         ("one_cell", "colA"), ("row1", "row1"), # biên: hai vùng giống hệt, EQ luôn đúng
+         ("one_cell", "one_cell"),               # biên: hai vùng 1 ô, EQ với chính nó
+         ("row1", "one_cell")]                   # biên: vùng 1 ô làm vế phải
 
 
 def make_compare(r1: str, r2: str, op: str, status: str) -> Clue:
@@ -36,7 +36,7 @@ def propagate(clauses, fixed):
     ok=False: gặp clause bị vi phạm hoàn toàn -> CNF chắc chắn UNSAT với phép gán này.
     ok=True : không xung đột; test gọi phải tự kiểm tra mọi biến đã bị ép
               (nếu còn biến phụ tự do thì kết luận SAT chưa chắc đúng).
-    Không gọi DPLL để test độc lập với module D.
+    Không gọi DPLL, để test này độc lập với logic/dpll.py.
     """
     assignment = dict(fixed)
     changed = True
@@ -93,7 +93,7 @@ class TestEncodeCompare(unittest.TestCase):
         clue = make_compare("nei_B2", "row1", "EQ", "INNOCENT")
         self.assertEqual(Encoder(N)._encode_compare(clue), Encoder(N)._encode_compare(clue))
 
-    def test_unknown_op_raises(self):
+    def test_invalid_op_raises_before_allocating_aux(self):
         clue = make_compare("row1", "colA", "GT", "CRIMINAL")
         bad = Clue(id=clue.id, owner=clue.owner, type="COMPARE",
                    params={**clue.params, "op": "NE"})
@@ -134,7 +134,7 @@ class TestEncodeCompare(unittest.TestCase):
             clue = Clue(id="clue_A1", owner="A1", type="COMPARE",
                         params=dict(region1=regions[r1], region2=regions[r2],
                                     op=op, status=status))
-            enc = Encoder(n)  # tạo NGOÀI vòng 200 lần
+            enc = Encoder(n)  # tạo ngoài vòng 200 lần
             clauses = enc._encode_compare(clue)
             all_vars = set(range(1, n * n + enc.num_aux + 1))
             for _ in range(200):
