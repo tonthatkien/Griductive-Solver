@@ -10,9 +10,9 @@ script ghi dòng kết quả đó rồi chạy tiếp các bài sau.
 
 Cách đếm các cột kết quả:
 - `unique`: kiểm tra bằng `uniqueness_check` trên toàn bộ clue của file JSON
-  kèm `FACT` cho các ô `initially_revealed`, ghi `UNIQUE`, `MULTIPLE`, `UNSAT`
-  hoặc `TIMEOUT` (hết giờ ở bước này không đổi `status`). Bước này chạy tách
-  biệt, không cộng vào `sat_calls` và `runtime_sec`.
+  kèm `FACT` cho các ô `initially_revealed`, ghi `UNIQUE`, `MULTIPLE`, `UNSAT`,
+  `TIMEOUT` hoặc `ERROR` (hết giờ/lỗi ở đây không đổi `status`). Bước này chạy
+  tách biệt, không cộng vào `sat_calls`, các bộ đếm DPLL hay `runtime_sec`.
 - `sat_calls`: tổng số lần `LogicAgent` gọi `DPLLSolver.solve`, gồm truy vấn
   kiểm chứng của engine, lần kiểm tra KB cuối và truy vấn bị timeout.
 - `trace_sat_calls`: tổng `len(entry.sat_queries)` qua các bước `ACCEPTED`
@@ -20,7 +20,20 @@ Cách đếm các cột kết quả:
 - `untraced_sat_calls`: `sat_calls - trace_sat_calls` (các truy vấn ngoài
   `agent.trace`: kiểm chứng của engine, lượt quét cuối khi dừng và lượt quét
   dở trước khi timeout).
-- Các cột `primary_vars`, `aux_vars`, `clauses`, `reveal_waves` để trống.
+- `decisions`, `propagations`, `backtracks`: cộng từ `SolverStats` (D4) qua mọi
+  truy vấn trong `sat_calls`, gồm cả truy vấn kiểm chứng của engine và truy vấn
+  bị timeout, không gồm `uniqueness_check`: `decisions` là số lần chọn biến rẽ
+  nhánh trong `_dpll`, `propagations` là số literal gán qua unit clause (không
+  tính `assumptions`), `backtracks` là số nhánh trả `UNSAT`.
+- `primary_vars`, `aux_vars`, `clauses`: kích thước encoding của cả puzzle,
+  đếm bằng `Encoder.build_kb` (C6) trên toàn bộ clue của file JSON kèm `FACT`
+  `init_<cell>` cho các ô `initially_revealed`. Đây là cùng tập clue mà
+  `uniqueness_check` nhận. Số này không phụ thuộc agent dừng ở đâu, nên dòng
+  STUCK/TIMEOUT có cùng số với dòng SOLVED của cùng bài. Để trống khi truyền
+  sẵn `engine` hoặc khi đọc file/`build_kb` lỗi (lúc đó `unique` ghi `ERROR`).
+- `deduction_steps`: số bước `ACCEPTED` trong `agent.trace`. Mỗi bước chứng
+  minh một ô và lật đúng một clue mới, nên cột này cũng là số lượt lật thẻ.
+- `runtime_sec`: thời gian nạp puzzle và chạy `auto_solve` (giây).
 """
 from __future__ import annotations
 
@@ -40,7 +53,7 @@ if str(SOURCE_DIR) not in sys.path:
 from engine.character import parse_character  # noqa: E402
 from engine.clue import Clue  # noqa: E402
 from engine.constants import CRIMINAL, INNOCENT  # noqa: E402
-from engine.game_state import GameEngine  # noqa: E402
+from engine.game_state import GameEngine, PublicKB  # noqa: E402
 from logic.agent import (  # noqa: E402
     LogicAgent,
     RevealEngine,
@@ -48,6 +61,7 @@ from logic.agent import (  # noqa: E402
     UNSAT,
     uniqueness_check,
 )
+from logic.cnf_encoder import KB, Encoder  # noqa: E402
 
 DEFAULT_DATA_DIR = SOURCE_DIR / "data"
 DEFAULT_OUT_PATH = SOURCE_DIR / "experiments" / "results.csv"
@@ -70,7 +84,6 @@ FIELDNAMES = (
     "propagations",
     "backtracks",
     "deduction_steps",
-    "reveal_waves",
     "runtime_sec",
 )
 
@@ -120,16 +133,27 @@ def _puzzle_clues(path: Path) -> tuple[list[Clue], int]:
     return clues, n
 
 
-def _check_uniqueness(path: Path, timeout: float | None) -> str:
+def _log_error(puzzle_name: str, exc: Exception, stage: str = "") -> None:
+    detail = f": {exc}" if str(exc) else ""
+    suffix = f" ({stage})" if stage else ""
+    print(f"ERROR {puzzle_name}{suffix}: {type(exc).__name__}{detail}", file=sys.stderr)
+
+
+def _full_clue_kb(path: Path) -> tuple[list[Clue], int, KB]:
+    """Đọc toàn bộ clue (kèm FACT `init_<cell>`) một lần và dựng KB của cả puzzle."""
+    clues, n = _puzzle_clues(path)
+    return clues, n, Encoder(n).build_kb(PublicKB(n, tuple(clues)))
+
+
+def _check_uniqueness(
+    clues: list[Clue], n: int, timeout: float | None, puzzle_name: str
+) -> str:
     try:
-        clues, n = _puzzle_clues(path)
         is_unique, count = uniqueness_check(clues, n, timeout=timeout)
     except TimeoutError:
         return TIMEOUT
     except Exception as exc:
-        detail = f": {exc}" if str(exc) else ""
-        puzzle_name = f"{path.parent.name}/{path.name}"
-        print(f"ERROR {puzzle_name} (unique): {type(exc).__name__}{detail}", file=sys.stderr)
+        _log_error(puzzle_name, exc, "unique")
         return ERROR
     if is_unique:
         return UNIQUE
@@ -170,17 +194,29 @@ def run_one(
     except TimeoutError:
         status = agent.solve_status or TIMEOUT
     except Exception as exc:
-        detail = f": {exc}" if str(exc) else ""
-        print(f"ERROR {puzzle_name}: {type(exc).__name__}{detail}", file=sys.stderr)
+        _log_error(puzzle_name, exc)
     runtime_sec = round(time.perf_counter() - start, 6)
 
-    unique = _check_uniqueness(puzzle_path, timeout) if check_unique else ""
+    unique = primary_vars = aux_vars = clauses = ""
+    if check_unique:
+        try:
+            clues, n, kb = _full_clue_kb(puzzle_path)
+        except Exception as exc:
+            _log_error(puzzle_name, exc, "kb")
+            unique = ERROR
+        else:
+            primary_vars, aux_vars, clauses = kb.num_primary, kb.num_aux, kb.num_clauses
+            unique = _check_uniqueness(clues, n, timeout, puzzle_name)
+
     trace_sat_calls = sum(len(entry.sat_queries) for entry in agent.trace)
     return {
         "puzzle": puzzle_name,
         "size": size,
         "status": status,
         "unique": unique,
+        "primary_vars": primary_vars,
+        "aux_vars": aux_vars,
+        "clauses": clauses,
         "sat_calls": agent.sat_calls,
         "trace_sat_calls": trace_sat_calls,
         "untraced_sat_calls": agent.sat_calls - trace_sat_calls,

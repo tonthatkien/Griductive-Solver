@@ -3,7 +3,7 @@
 Quy ước: clause = list[int] (literal dương/âm), CNF = list[clause].
 Biến primary = board.var_of(cell, n); biến phụ bắt đầu từ n*n + 1.
 
-Các encoding đã cài (đều tự động, KHÔNG viết tay CNF cho từng puzzle):
+Các encoding (đều tự động, không viết tay CNF cho từng puzzle):
       FACT              : [[±Ci]]
       SAME_STATUS       : (¬Ci ∨ Cj) ∧ (Ci ∨ ¬Cj)
       DIFFERENT_STATUS  : (Ci ∨ Cj) ∧ (¬Ci ∨ ¬Cj)
@@ -14,23 +14,23 @@ Các encoding đã cài (đều tự động, KHÔNG viết tay CNF cho từng p
       COMPARE           : hai bộ đếm unary rồi nối, |R|(|R|+1)/2 biến phụ mỗi vùng
       NOISE             : không sinh clause nào, 0 biến phụ (clue luôn đúng, không thêm thông tin)
       build_kb          : CNF(clue đã lật) ∧ unit clause ô đã chứng minh; đếm lại biến phụ mỗi lần
-      status = INNOCENT thì đảo cực literal của các ô trong vùng.
 
-Report cần: suy ra công thức cho 1 clue nhị phân (SAME/DIFFERENT) và 1 clue đếm (EXACTLY).
+status = INNOCENT thì đảo cực literal của các ô trong vùng.
 """
 from dataclasses import dataclass
-from typing import List, TYPE_CHECKING, Tuple, Union
 from itertools import combinations
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 
 from engine import board
 from engine.clue import Clue, clue_status, resolve_region, validate_clue
-from engine.constants import CRIMINAL, INNOCENT
+from engine.constants import CRIMINAL, INNOCENT, STATUSES
 
 if TYPE_CHECKING:
     from engine.game_state import PublicKB
 
 Clause = List[int]
 Lit = Union[int, bool]
+
 
 def _neg(x: Lit) -> Lit:
     """Phủ định literal hoặc hằng."""
@@ -56,9 +56,12 @@ class KB:
 
 
 class Encoder:
-    """Đổi clue sang CNF; biến phụ được cấp tách riêng khỏi biến primary"""
+    """Đổi clue sang CNF; biến phụ được cấp tách riêng khỏi biến primary.
 
-    # (đảo hai vùng?, strict?) cho từng phép so sánh; EQ = GE ∧ LE
+    encode_clue cộng dồn biến phụ qua các lần gọi trên cùng một Encoder.
+    build_kb thì đánh số lại biến phụ từ N*N + 1 mỗi lần gọi.
+    Encoder không kiểm tra n; caller phải đảm bảo n hợp lệ.
+    """
     _COMPARE_PLAN = {
         "GE": [(False, False)],
         "GT": [(False, True)],
@@ -86,8 +89,8 @@ class Encoder:
 
     def literal_of(self, cell: str, status: str) -> int:
         """Literal của ô: +var nếu status là CRIMINAL, -var nếu là INNOCENT"""
-        if not board.is_valid_cell(cell, self.n):
-            raise ValueError(f"Cell is không hợp lệ: {cell!r}")
+        if not isinstance(cell, str) or not board.is_valid_cell(cell, self.n):
+            raise ValueError(f"Cell không hợp lệ: {cell!r}")
         var = board.var_of(cell, self.n)
         if status == CRIMINAL:
             return var
@@ -108,7 +111,7 @@ class Encoder:
         return [[-a, b], [a, -b]]
 
     def encode_parity(self, clue: Clue) -> List[Clause]:
-        """Encode PARITY: số ô có trạng thái `status` trong vùng là chẵn/lẻ (Extension 1)
+        """Encode PARITY: số ô có trạng thái `status` trong vùng là chẵn/lẻ
 
         Dùng chuỗi XOR (Tseitin): acc_1 = l_1, acc_i <-> acc_{i-1} XOR l_i, rồi ép acc_m
         theo parity. Bước cuối ép trực tiếp nên không cần biến phụ riêng.
@@ -190,12 +193,9 @@ class Encoder:
         return [[ci, cj], [-ci, -cj]]
 
     def _pair_literals(self, clue: Clue) -> Tuple[int, int]:
-        """Literal dương của cell1, cell2 (hai ô phải khác nhau)"""
-        cell1, cell2 = clue.params["cell1"], clue.params["cell2"]
-        if cell1 == cell2:
-            raise ValueError(f"cell1 and cell2 must differ: {cell1!r}")
-        return self.literal_of(cell1, CRIMINAL), self.literal_of(cell2, CRIMINAL)
-
+        """Literal dương của cell1, cell2 (validate_clue đã đảm bảo hai ô khác nhau)."""
+        return (self.literal_of(clue.params["cell1"], CRIMINAL),
+                self.literal_of(clue.params["cell2"], CRIMINAL))
     def _count_literals(self, clue: Clue) -> Tuple[List[int], int]:
         """Literal của các ô trong vùng (row-major) và k.
 
@@ -212,6 +212,8 @@ class Encoder:
 
         Mỗi tập S (|S| = k+1) cho clause (OR của ¬l với l trong S): C(m, k+1) clause.
         k = 0 cho m unit clause ¬l; k >= m không có tập nào nên không sinh clause.
+        Số clause tăng theo tổ hợp: vùng 8 ô (tối đa của neighbors) thì nhỏ, nhưng vùng
+        `list` rất dài (vd 25 ô) có thể sinh hàng triệu clause.
         """
         return [[-lit for lit in subset] for subset in combinations(lits, k + 1)]
 
@@ -221,6 +223,8 @@ class Encoder:
 
         Mỗi tập S (|S| = m-k+1) cho clause (OR của l với l trong S): C(m, m-k+1) clause.
         k = m cho m unit clause l; k = 0 không có tập nào (m+1 > m) nên không sinh clause.
+        Số clause tăng theo tổ hợp: vùng 8 ô (tối đa của neighbors) thì nhỏ, nhưng vùng
+        `list` rất dài (vd 25 ô) có thể sinh hàng triệu clause.
         """
         return [list(subset) for subset in combinations(lits, len(lits) - k + 1)]
 
@@ -251,13 +255,11 @@ class Encoder:
              LE, LT: đổi chỗ hai vùng. EQ = GE ^ LE.
         Số clause: đúng 2|R|² cho mỗi bộ đếm (sau khi rút gọn hằng), cộng clause nối.
         Với _at_least_as_many, GE có |small| clause nối, GT có |small| + 1
-        (small là bộ đếm đóng vai vế nhỏ sau khi đổi chỗ); EQ = GE + LE.
+        (big/small là bộ đếm của vế lớn/vế nhỏ sau khi đổi chỗ hai vùng nếu cần); EQ = GE + LE.
         Hai vùng chồng nhau vẫn đúng vì mỗi bộ đếm đếm riêng theo literal của ô.
         """
         validate_clue(clue, self.n)
-        plan = self._COMPARE_PLAN.get(clue.params["op"])
-        if plan is None:  # phòng thủ: kiểm trước khi cấp aux
-            raise ValueError(f"COMPARE: op không hợp lệ: {clue.params['op']!r}")
+        plan = self._COMPARE_PLAN[clue.params["op"]]
         status = clue_status(clue)
         out1, clauses1 = self._unary_counter(self._region_literals(clue.params["region1"], status))
         out2, clauses2 = self._unary_counter(self._region_literals(clue.params["region2"], status))
@@ -272,7 +274,7 @@ class Encoder:
         return [self.literal_of(c, status) for c in resolve_region(region, self.n)]
 
     @staticmethod
-    def _make_clause(items: List[Lit]) -> Union[Clause, None]:
+    def _make_clause(items: List[Lit]) -> Optional[Clause]:
         """Rút gọn hằng: có True -> clause luôn đúng (None); bỏ False; còn lại là clause."""
         if any(x is True for x in items):
             return None
@@ -329,9 +331,11 @@ class Encoder:
         """
         if public_kb.n != self.n:
             raise ValueError(f"PublicKB có n={public_kb.n}, Encoder có n={self.n}")
-        for cell in public_kb.proved:
+        for cell, verdict in public_kb.proved.items():
             if not isinstance(cell, str) or not board.is_valid_cell(cell, self.n):
                 raise ValueError(f"Ô đã chứng minh không hợp lệ: {cell!r}")
+            if verdict not in STATUSES:
+                raise ValueError(f"Verdict không hợp lệ ở ô {cell}: {verdict!r}")
         self._next_aux = board.first_aux_var(self.n)
         self.num_aux = 0
 

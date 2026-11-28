@@ -1,4 +1,4 @@
-"""C7: encoder ↔ semantic evaluator. Với mỗi loại clue, duyệt mọi assignment của các ô
+"""Đối chiếu encoder ↔ semantic evaluator. Với mỗi loại clue, duyệt mọi assignment của các ô
 clue nhắc tới và so `evaluate(...)` với việc CNF có thỏa hay không (kiểm bằng DPLL,
 assumptions = giá trị primary, biến phụ để DPLL tự tìm)."""
 import itertools

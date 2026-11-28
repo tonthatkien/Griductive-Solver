@@ -1,10 +1,11 @@
-import unittest
+"""Test khung Encoder, encode clue nhị phân và clue đếm."""
 import itertools
+import unittest
 from math import comb
 
-from logic.cnf_encoder import KB, Encoder
 from engine import board
 from engine.clue import Clue, resolve_region
+from logic.cnf_encoder import KB, Encoder
 
 
 class TestEncoderBase(unittest.TestCase):
@@ -22,10 +23,6 @@ class TestEncoderBase(unittest.TestCase):
 
     def test_literal_of_innocent_is_negative(self):
         self.assertEqual(Encoder(3).literal_of("C2", "INNOCENT"), -6)
-
-    def test_literal_of_requires_status(self):
-        with self.assertRaises(TypeError):
-            Encoder(3).literal_of("A1")
 
     def test_literal_of_invalid_cell_raises(self):
         for bad in ["D1", "a1", "A0", "A01", ""]:
@@ -65,6 +62,7 @@ class TestEncoderBase(unittest.TestCase):
     def test_num_primary_is_n_squared(self):
         self.assertEqual(Encoder(3).num_primary, 9)
         self.assertEqual(Encoder(5).num_primary, 25)
+
 
 def make_clue(clue_type, **params):
     return Clue(id="clue_test", owner="A1", type=clue_type, params=params)
@@ -125,6 +123,7 @@ class TestEncodeBinaryClues(unittest.TestCase):
     def test_unknown_clue_type_raises_value_error(self):
         with self.assertRaises(ValueError):
             Encoder(3).encode_clue(make_clue("BOGUS"))
+
 
 ROW2 = {"type": "row", "number": 2}
 NEI_A1 = {"type": "neighbors", "cell": "A1"}
