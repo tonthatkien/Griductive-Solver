@@ -37,13 +37,13 @@ class _Prop:
 
 
 PROPS = (
-    _Prop("folder", 0.50, 0.58, 0.54, 0.40, -1.5, "VÀO VỤ ÁN", 300),
-    _Prop("notebook", 0.19, 0.62, 0.25, 0.34, 4.0, "CÁCH CHƠI", 520),
-    _Prop("radio", 0.82, 0.69, 0.33, 0.23, -3.0, "ÂM THANH", 740),
-    _Prop("medal", 0.13, 0.31, 0.12, 0.17, 0.0, "", 900),
-    _Prop("photo", 0.88, 0.31, 0.16, 0.21, 6.0, "", 1050),
-    _Prop("cup", 0.37, 0.90, 0.13, 0.13, 0.0, "", 1150),
-    _Prop("quit", 0.93, 0.945, 0.13, 0.05, 0.0, "THOÁT", 1250),
+    _Prop("folder", 0.50, 0.58, 0.54, 0.40, -1.5, "VÀO VỤ ÁN", 0),
+    _Prop("notebook", 0.19, 0.62, 0.25, 0.34, 4.0, "CÁCH CHƠI", 70),
+    _Prop("radio", 0.82, 0.69, 0.33, 0.23, -3.0, "ÂM THANH", 120),
+    _Prop("medal", 0.13, 0.31, 0.12, 0.17, 0.0, "", 160),
+    _Prop("photo", 0.88, 0.31, 0.16, 0.21, 6.0, "", 190),
+    _Prop("cup", 0.37, 0.90, 0.13, 0.13, 0.0, "", 220),
+    _Prop("quit", 0.93, 0.945, 0.13, 0.05, 0.0, "THOÁT", 250),
 )
 ORDER = tuple(p.key for p in PROPS if p.label)          # thứ tự phím mũi tên
 BY_KEY = {p.key: p for p in PROPS}
@@ -104,14 +104,14 @@ class HomePage(QWidget):
             tween.jump(0.0)
         self._title.jump(0.0)
         self._lamp.jump(0.0)
-        self._lamp.go(1.0, 1400)
-        QTimer.singleShot(500, lambda: self._title.go(1.0, 1100) if token == self._intro_token else None)
+        self._lamp.go(1.0, 300)
+        QTimer.singleShot(0, lambda: self._title.go(1.0, 250) if token == self._intro_token else None)
         for prop in PROPS:
             QTimer.singleShot(prop.delay, lambda k=prop.key: self._drop(k, token))
 
     def _drop(self, key: str, token: int) -> None:
         if token == self._intro_token:
-            self._appear[key].go(1.0, 650)
+            self._appear[key].go(1.0, 220)
 
     # ---- hình học -----------------------------------------------------------------------
     def _layout(self) -> Dict[str, QRectF]:
