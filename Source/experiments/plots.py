@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import math
 import sys
 from pathlib import Path
 from statistics import fmean, median
@@ -301,45 +300,12 @@ def _runtime_bounds(row: dict[str, object]) -> tuple[float, float, float] | None
     return rt_val, max(0.0, rt_val - lo), max(0.0, hi - rt_val)
 
 
-def _label_offset(
-    point_idx: int,
-    nx: float,
-    ny: float,
-    occupied: list[tuple[float, float]],
-) -> tuple[int, int]:
-    candidates = ((5, 5), (5, -10), (-22, 5), (-22, -10), (5, 13), (-22, 13))
-    if nx > 0.9:
-        candidates = ((-22, 5), (-22, -10), (5, 5), (5, -10), (-22, 13), (5, 13))
-    if ny < 0.05:
-        candidates = tuple(c for c in candidates if c[1] > 0) or candidates
-    others = [pt for i, pt in enumerate(occupied) if i != point_idx]
-    best, best_dist = candidates[0], -1.0
-    for dx, dy in candidates:
-        lx, ly = nx + dx / 420.0, ny + dy / 260.0
-        dist = min((abs(lx - ox) / 0.07 + abs(ly - oy) / 0.06) for ox, oy in others)
-        if all(abs(lx - ox) >= 0.07 or abs(ly - oy) >= 0.06 for ox, oy in others):
-            occupied.append((lx, ly))
-            return dx, dy
-        if dist > best_dist:
-            best_dist, best = dist, (dx, dy)
-    occupied.append((nx + best[0] / 420.0, ny + best[1] / 260.0))
-    return best
-
-
 def _annotate_scatter(ax: Any, points: Sequence[tuple[int, float, str]]) -> None:
-    if len(points) <= 1:
-        for x, y, label in points:
-            ax.annotate(label, (x, y), xytext=(5, 5), textcoords="offset points", fontsize=8)
-        return
-    xs = [p[0] for p in points]
-    log_ys = [math.log10(p[1]) for p in points]
-    x_min, x_span = min(xs), max(max(xs) - min(xs), 1)
-    y_min, y_span = min(log_ys), max(max(log_ys) - min(log_ys), 1.0)
-    normed = [((x - x_min) / x_span, (ly - y_min) / y_span) for x, ly in zip(xs, log_ys)]
-    occupied = list(normed)
-    for idx, ((x, y, label), (nx, ny)) in enumerate(zip(points, normed)):
-        dx, dy = _label_offset(idx, nx, ny, occupied)
-        ax.annotate(label, (x, y), xytext=(dx, dy), textcoords="offset points", fontsize=8)
+    ordered = sorted(points, key=lambda p: (p[0], p[1]))
+    for idx, (x, y, label) in enumerate(ordered):
+        dy = 6 if idx % 2 == 0 else -11
+        dx, ha = (-5, "right") if len(ordered) > 1 and idx == len(ordered) - 1 else (5, "left")
+        ax.annotate(label, (x, y), xytext=(dx, dy), textcoords="offset points", ha=ha, fontsize=8)
 
 
 def _plot_runtime_vs_clauses(

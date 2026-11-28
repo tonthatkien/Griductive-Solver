@@ -286,7 +286,7 @@ class PlotsSummaryFailureAndMarkdownTests(unittest.TestCase):
                 self.assertGreater(len(raw), 1000)
 
     @unittest.skipUnless(HAS_MATPLOTLIB, "matplotlib chưa được cài đặt")
-    def test_plot_all_handles_blank_cells_without_turning_them_into_zero(self) -> None:
+    def test_plot_all_accepts_blank_cells(self) -> None:
         rows = [
             _make_row(puzzle="puzzles_3x3/p01.json", size=3, decisions=0, backtracks=0),
             _make_row(
