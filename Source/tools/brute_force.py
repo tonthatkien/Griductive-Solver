@@ -18,13 +18,21 @@ from time import perf_counter
 from typing import Literal
 
 from engine import board
-from engine.clue import CORE_TYPES, COUNT_TYPES, EXT_TYPES, Clue, clue_from_dict, validate_clue
+from engine.clue import (
+    CORE_TYPES,
+    COUNT_TYPES,
+    EXT_TYPES,
+    NOISE_TYPE,
+    Clue,
+    clue_from_dict,
+    validate_clue,
+)
 from engine.constants import CRIMINAL, INCONSISTENT, INNOCENT, STATUSES, UNKNOWN
 from engine.game_state import PublicKB
 from logic.semantic import evaluate
 
 SUPPORTED_SIZES = (3, 4)
-CLUE_TYPES = CORE_TYPES + EXT_TYPES
+CLUE_TYPES = CORE_TYPES + EXT_TYPES + (NOISE_TYPE,)
 UNSAT, UNIQUE, MULTIPLE = "UNSAT", "UNIQUE", "MULTIPLE"
 Assignment = dict[str, bool]
 
