@@ -1,7 +1,9 @@
-"""Tổng hợp bảng thực nghiệm từ các file CSV do run_tests.py tạo ra.
+"""Tổng hợp bảng và biểu đồ thực nghiệm từ các file CSV do run_tests.py tạo ra.
 
 Chạy từ thư mục Source/:
+    python experiments/plots.py
     python experiments/plots.py --tables
+    python experiments/plots.py --figures --image-dir ../docs/image
 """
 from __future__ import annotations
 
@@ -10,13 +12,30 @@ import csv
 import sys
 from pathlib import Path
 from statistics import fmean, median
-from typing import Sequence
+from typing import Any, Sequence
 
 EXPERIMENTS_DIR = Path(__file__).resolve().parent
 DEFAULT_RUN_PATHS = tuple(EXPERIMENTS_DIR / "runs" / f"run_{i}.csv" for i in range(1, 6))
 DEFAULT_DEMO_PATH = EXPERIMENTS_DIR / "results_demo.csv"
+DEFAULT_IMAGE_DIR = EXPERIMENTS_DIR.parent.parent / "docs" / "image"
 
 SOLVED = "SOLVED"
+
+SIZE_COLORS = {
+    3: "#0072B2",
+    4: "#009E73",
+    5: "#D55E00",
+}
+SIZE_MARKERS = {
+    3: "o",
+    4: "s",
+    5: "^",
+}
+FIGURE_NAMES = (
+    "runtime_vs_clauses.png",
+    "sat_calls.png",
+    "dpll_counters.png",
+)
 
 INT_COLS = frozenset({
     "size",
@@ -260,22 +279,209 @@ def render_tables(
     return "\n\n".join(f"### {title}\n\n{table}" for title, table in sections)
 
 
+def _short_puzzle_name(puzzle: object) -> str:
+    return str(puzzle).removeprefix("puzzles_").removesuffix(".json")
+
+
+def _style_axes(ax: Any, grid_axis: str = "y") -> None:
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.grid(True, axis=grid_axis, which="major", linestyle="--", alpha=0.3)
+    ax.set_axisbelow(True)
+
+
+def _runtime_bounds(row: dict[str, object]) -> tuple[float, float, float] | None:
+    rt = row["runtime_median"] if "runtime_median" in row else row.get("runtime_sec", "")
+    if rt == "":
+        return None
+    rt_val = float(rt)
+    lo = float(row["runtime_min"]) if row.get("runtime_min", "") != "" else rt_val
+    hi = float(row["runtime_max"]) if row.get("runtime_max", "") != "" else rt_val
+    return rt_val, max(0.0, rt_val - lo), max(0.0, hi - rt_val)
+
+
+def _plot_runtime_vs_clauses(
+    plt: Any,
+    ticker: Any,
+    rows: Sequence[dict[str, object]],
+    out_path: Path,
+) -> None:
+    fig, ax = plt.subplots(figsize=(7.5, 4.8), constrained_layout=True)
+    sizes = sorted({int(r["size"]) for r in rows if isinstance(r.get("size"), int)})
+    for size in sizes:
+        pts = [r for r in rows if r.get("size") == size and r.get("clauses", "") != ""]
+        xs, ys, err_lo, err_hi, labels = [], [], [], [], []
+        for r in pts:
+            bounds = _runtime_bounds(r)
+            if bounds is None:
+                continue
+            xs.append(int(r["clauses"]))
+            ys.append(bounds[0])
+            err_lo.append(bounds[1])
+            err_hi.append(bounds[2])
+            labels.append(_short_puzzle_name(r["puzzle"]).split("/")[-1])
+        if not xs:
+            continue
+        color = SIZE_COLORS.get(size, "#555555")
+        ax.errorbar(
+            xs,
+            ys,
+            yerr=[err_lo, err_hi],
+            fmt=SIZE_MARKERS.get(size, "o"),
+            color=color,
+            capsize=3,
+            markersize=6,
+            linewidth=1.2,
+            label=f"{size}×{size}",
+        )
+        for idx, (x, y, label) in enumerate(zip(xs, ys, labels)):
+            dy = -10 if (size == 3 and idx == 1) or (size == 5 and idx == 0) else 6
+            ax.annotate(label, (x, y), xytext=(4, dy), textcoords="offset points", fontsize=8)
+
+    ax.set_yscale("log")
+    ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: f"{v:g}"))
+    ax.set_title("Thời gian chạy theo số mệnh đề CNF")
+    ax.set_xlabel("Số mệnh đề CNF (clauses)")
+    ax.set_ylabel("Thời gian chạy trung vị (giây, thang log)")
+    ax.legend(title="Kích thước (thanh lỗi: min-max)", frameon=True)
+    _style_axes(ax, grid_axis="both")
+    fig.savefig(out_path, dpi=150, facecolor="white")
+    plt.close(fig)
+
+
+def _plot_sat_calls(
+    plt: Any,
+    patch_cls: Any,
+    rows: Sequence[dict[str, object]],
+    out_path: Path,
+) -> None:
+    valid = [
+        r for r in rows
+        if r.get("trace_sat_calls", "") != "" and r.get("untraced_sat_calls", "") != ""
+    ]
+    labels = [_short_puzzle_name(r["puzzle"]) for r in valid]
+    fig, ax = plt.subplots(figsize=(8.6, 4.8), constrained_layout=True)
+    max_total = 0
+    for idx, row in enumerate(valid):
+        color = SIZE_COLORS.get(int(row["size"]) if isinstance(row.get("size"), int) else 0, "#555")
+        traced = int(row["trace_sat_calls"])
+        untraced = int(row["untraced_sat_calls"])
+        total = traced + untraced
+        max_total = max(max_total, total)
+        ax.bar(idx, traced, width=0.64, color=color, alpha=0.9, edgecolor=color)
+        ax.bar(
+            idx, untraced, bottom=traced, width=0.64, color=color,
+            alpha=0.28, edgecolor=color, hatch="///",
+        )
+        ax.text(idx, total + 6, str(total), ha="center", va="bottom", fontsize=8)
+
+    ax.set_xticks(range(len(labels)), labels, rotation=25, ha="right")
+    ax.set_ylim(0, max_total * 1.14 if max_total else 1)
+    ax.set_title("Số lần gọi SAT trong và ngoài trace theo từng bài")
+    ax.set_xlabel("Bài toán")
+    ax.set_ylabel("Số lần gọi DPLL (lần)")
+    handles = [patch_cls(facecolor=c, label=f"{s}×{s}") for s, c in SIZE_COLORS.items()]
+    handles.extend([
+        patch_cls(facecolor="#666666", alpha=0.9, label="Trong trace (trace_sat_calls)"),
+        patch_cls(facecolor="#666666", alpha=0.28, edgecolor="#444444", hatch="///",
+                  label="Ngoài trace (untraced_sat_calls)"),
+    ])
+    ax.legend(handles=handles, frameon=True, loc="upper left", fontsize=8.5)
+    _style_axes(ax, grid_axis="y")
+    fig.savefig(out_path, dpi=150, facecolor="white")
+    plt.close(fig)
+
+
+def _plot_dpll_counters(
+    plt: Any,
+    patch_cls: Any,
+    rows: Sequence[dict[str, object]],
+    out_path: Path,
+) -> None:
+    panels = (
+        ("decisions", "Rẽ nhánh (decisions)"),
+        ("propagations", "Lan truyền đơn vị (propagations)"),
+        ("backtracks", "Quay lui (backtracks)"),
+    )
+    fig, axes = plt.subplots(1, 3, figsize=(13.5, 4.6), constrained_layout=True, sharex=True)
+    labels = [_short_puzzle_name(r["puzzle"]) for r in rows]
+    colors = [
+        SIZE_COLORS.get(int(r["size"]) if isinstance(r.get("size"), int) else 0, "#555555")
+        for r in rows
+    ]
+    for ax, (col, title) in zip(axes, panels):
+        vals = [int(r[col]) if r.get(col, "") != "" else 0 for r in rows]
+        ax.bar(range(len(rows)), vals, width=0.66, color=colors, alpha=0.9)
+        ax.set_yscale("symlog", linthresh=1)
+        top = max(vals) if vals else 1
+        ax.set_ylim(0, max(top * 2.4, 10))
+        for idx, val in enumerate(vals):
+            if val == 0:
+                ax.text(idx, 0.12, "0", ha="center", va="bottom", fontsize=7.5, color="#444444")
+        ax.set_title(title)
+        ax.set_xticks(range(len(labels)), labels, rotation=35, ha="right", fontsize=8)
+        _style_axes(ax, grid_axis="y")
+
+    axes[0].set_ylabel("Số lần (thang symlog)")
+    handles = [patch_cls(facecolor=c, label=f"{s}×{s}") for s, c in SIZE_COLORS.items()]
+    axes[0].legend(handles=handles, loc="upper left", ncol=3, frameon=True, fontsize=8.5)
+    fig.suptitle("Các bộ đếm DPLL theo từng bài (thang symlog)")
+    fig.savefig(out_path, dpi=150, facecolor="white")
+    plt.close(fig)
+
+
+def plot_all(
+    rows: Sequence[dict[str, object]],
+    out_dir: Path | str | None = None,
+) -> list[Path]:
+    """Vẽ 3 biểu đồ thực nghiệm PNG (150 dpi) bằng backend Agg của matplotlib."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.patches as mpatches
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as ticker
+
+    target_dir = Path(DEFAULT_IMAGE_DIR if out_dir is None else out_dir)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    paths = [target_dir / name for name in FIGURE_NAMES]
+    _plot_runtime_vs_clauses(plt, ticker, rows, paths[0])
+    _plot_sat_calls(plt, mpatches.Patch, rows, paths[1])
+    _plot_dpll_counters(plt, mpatches.Patch, rows, paths[2])
+    return paths
+
+
 def main(argv: Sequence[str] | None = None) -> int:
-    """Chạy CLI in các bảng tổng hợp thực nghiệm từ CSV."""
+    """Chạy CLI in bảng tổng hợp và xuất biểu đồ thực nghiệm từ CSV."""
     for stream in (sys.stdout, sys.stderr):
         if stream is not None and hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
 
-    parser = argparse.ArgumentParser(description="Tổng hợp bảng thực nghiệm từ các file CSV.")
+    parser = argparse.ArgumentParser(description="Tổng hợp bảng và biểu đồ thực nghiệm từ CSV.")
     parser.add_argument(
         "--tables",
         action="store_true",
         help="In ra 3 bảng Markdown: chi tiết từng bài, tổng hợp theo kích thước và failure cases",
     )
+    parser.add_argument(
+        "--figures",
+        action="store_true",
+        help="Vẽ 3 biểu đồ PNG vào thư mục --image-dir",
+    )
+    parser.add_argument(
+        "--image-dir",
+        type=Path,
+        default=None,
+        help="Thư mục lưu file PNG (mặc định docs/image/ ở gốc repo)",
+    )
     args = parser.parse_args(argv)
-    run_all = not args.tables
+    run_all = not (args.tables or args.figures)
     if args.tables or run_all:
         print(render_tables())
+    if args.figures or run_all:
+        saved = plot_all(merge_runs(DEFAULT_RUN_PATHS), args.image_dir)
+        for path in saved:
+            print(f"Đã lưu: {path}")
     return 0
 
 

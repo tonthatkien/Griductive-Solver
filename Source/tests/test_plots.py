@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import importlib.util
 import io
 import tempfile
 import unittest
@@ -13,16 +14,19 @@ from unittest.mock import patch
 from experiments.plots import (
     DEFAULT_DEMO_PATH,
     DEFAULT_RUN_PATHS,
+    FIGURE_NAMES,
     failure_rows,
     load_rows,
     main,
     merge_runs,
+    plot_all,
     summary_by_size,
     to_markdown,
 )
 from experiments.run_tests import FIELDNAMES
 
 EXPERIMENTS_DIR = Path(__file__).resolve().parents[1] / "experiments"
+HAS_MATPLOTLIB = importlib.util.find_spec("matplotlib") is not None
 
 
 def _make_row(
@@ -212,12 +216,14 @@ class PlotsSummaryFailureAndMarkdownTests(unittest.TestCase):
             with (
                 patch("experiments.plots.DEFAULT_RUN_PATHS", (run1, run2)),
                 patch("experiments.plots.DEFAULT_DEMO_PATH", demo),
+                patch("experiments.plots.plot_all") as mock_plot,
                 redirect_stdout(stdout),
             ):
                 code = main(["--tables"])
 
         output = stdout.getvalue()
         self.assertEqual(code, 0)
+        mock_plot.assert_not_called()
         self.assertIn("### Chi tiết từng bài", output)
         self.assertIn("### Tổng hợp theo kích thước", output)
         self.assertIn("### Failure cases", output)
@@ -227,7 +233,7 @@ class PlotsSummaryFailureAndMarkdownTests(unittest.TestCase):
         self.assertIn("demo_cases/ambiguous.json", output)
         self.assertIn("0.150", output)
 
-    def test_cli_without_flags_also_prints_tables(self) -> None:
+    def test_cli_without_flags_runs_both_tables_and_figures(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             run1 = _write_csv(root / "run_1.csv", [_make_row(runtime_sec=0.100)])
@@ -236,12 +242,48 @@ class PlotsSummaryFailureAndMarkdownTests(unittest.TestCase):
             with (
                 patch("experiments.plots.DEFAULT_RUN_PATHS", (run1,)),
                 patch("experiments.plots.DEFAULT_DEMO_PATH", demo),
+                patch("experiments.plots.plot_all", return_value=[]) as mock_plot,
                 redirect_stdout(stdout),
             ):
                 code = main([])
 
         self.assertEqual(code, 0)
         self.assertIn("### Tổng hợp theo kích thước", stdout.getvalue())
+        mock_plot.assert_called_once()
+        self.assertIsNone(mock_plot.call_args.args[1])
+
+    def test_cli_figures_only_passes_image_dir_and_skips_tables(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run1 = _write_csv(root / "run_1.csv", [_make_row(runtime_sec=0.100)])
+            img_dir = root / "imgs"
+            fake_paths = [img_dir / name for name in FIGURE_NAMES]
+            stdout = io.StringIO()
+            with (
+                patch("experiments.plots.DEFAULT_RUN_PATHS", (run1,)),
+                patch("experiments.plots.plot_all", return_value=fake_paths) as mock_plot,
+                redirect_stdout(stdout),
+            ):
+                code = main(["--figures", "--image-dir", str(img_dir)])
+
+        output = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertNotIn("### Chi tiết từng bài", output)
+        mock_plot.assert_called_once()
+        self.assertEqual(mock_plot.call_args.args[1], img_dir)
+
+    @unittest.skipUnless(HAS_MATPLOTLIB, "matplotlib chưa được cài đặt")
+    def test_plot_all_writes_three_png_files(self) -> None:
+        rows = merge_runs(DEFAULT_RUN_PATHS)
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "figures"
+            paths = plot_all(rows, out_dir)
+            self.assertEqual([p.name for p in paths], list(FIGURE_NAMES))
+            for path in paths:
+                self.assertTrue(path.is_file(), f"Thiếu file {path}")
+                raw = path.read_bytes()
+                self.assertTrue(raw.startswith(b"\x89PNG\r\n\x1a\n"))
+                self.assertGreater(len(raw), 1000)
 
     def test_cli_tables_on_repo_csvs(self) -> None:
         self.assertTrue(all(Path(p).is_file() for p in DEFAULT_RUN_PATHS))
