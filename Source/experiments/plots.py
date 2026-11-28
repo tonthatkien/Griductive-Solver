@@ -56,7 +56,7 @@ DETAIL_COLUMNS = (
     "runtime_min",
     "runtime_max",
 )
-SUMMARY_COLUMNS = ("size", "status", *COUNT_COLS, "runtime_sec")
+SUMMARY_COLUMNS = ("size", "status", *COUNT_COLS, "runtime_median_mean")
 FAILURE_COLUMNS = ("puzzle", "size", "status", "unique", *COUNT_COLS, "runtime_sec")
 
 
@@ -207,6 +207,13 @@ def to_markdown(rows: Sequence[dict[str, object]], columns: Sequence[str]) -> st
     return "\n".join(lines)
 
 
+def _format_count_mean(value: float) -> str:
+    rounded = round(value, 1)
+    if rounded.is_integer():
+        return str(int(rounded))
+    return f"{rounded:.1f}"
+
+
 def _format_summary_rows(groups: Sequence[dict[str, object]]) -> list[dict[str, object]]:
     formatted: list[dict[str, object]] = []
     for g in groups:
@@ -219,13 +226,14 @@ def _format_summary_rows(groups: Sequence[dict[str, object]]) -> list[dict[str, 
         }
         for col in COUNT_COLS:
             mean_val = g[f"{col}_mean"]
-            row[col] = (
-                ""
-                if mean_val == ""
-                else f"{mean_val:.3f} ({g[f'{col}_min']}-{g[f'{col}_max']})"
-            )
+            if mean_val == "":
+                row[col] = ""
+            else:
+                assert isinstance(mean_val, (int, float))
+                mean_str = _format_count_mean(float(mean_val))
+                row[col] = f"{mean_str} ({g[f'{col}_min']}-{g[f'{col}_max']})"
         rt_mean = g["runtime_mean"]
-        row["runtime_sec"] = (
+        row["runtime_median_mean"] = (
             ""
             if rt_mean == ""
             else f"{rt_mean:.3f} ({g['runtime_min']:.3f}-{g['runtime_max']:.3f})"
@@ -264,8 +272,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="In ra 3 bảng Markdown: chi tiết từng bài, tổng hợp theo kích thước và failure cases",
     )
-    parser.parse_args(argv)
-    print(render_tables())
+    args = parser.parse_args(argv)
+    run_all = not args.tables
+    if args.tables or run_all:
+        print(render_tables())
     return 0
 
 

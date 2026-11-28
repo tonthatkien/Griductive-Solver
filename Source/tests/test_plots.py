@@ -221,8 +221,27 @@ class PlotsSummaryFailureAndMarkdownTests(unittest.TestCase):
         self.assertIn("### Chi tiết từng bài", output)
         self.assertIn("### Tổng hợp theo kích thước", output)
         self.assertIn("### Failure cases", output)
+        self.assertIn("runtime_median_mean", output)
+        self.assertIn("9 (9-9)", output)
+        self.assertIn("0 (0-0)", output)
         self.assertIn("demo_cases/ambiguous.json", output)
         self.assertIn("0.150", output)
+
+    def test_cli_without_flags_also_prints_tables(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run1 = _write_csv(root / "run_1.csv", [_make_row(runtime_sec=0.100)])
+            demo = _write_csv(root / "demo.csv", [_make_row(status="SOLVED")])
+            stdout = io.StringIO()
+            with (
+                patch("experiments.plots.DEFAULT_RUN_PATHS", (run1,)),
+                patch("experiments.plots.DEFAULT_DEMO_PATH", demo),
+                redirect_stdout(stdout),
+            ):
+                code = main([])
+
+        self.assertEqual(code, 0)
+        self.assertIn("### Tổng hợp theo kích thước", stdout.getvalue())
 
     def test_cli_tables_on_repo_csvs(self) -> None:
         self.assertTrue(all(Path(p).is_file() for p in DEFAULT_RUN_PATHS))
@@ -233,6 +252,7 @@ class PlotsSummaryFailureAndMarkdownTests(unittest.TestCase):
         output = stdout.getvalue()
         self.assertEqual(code, 0)
         self.assertIn("puzzles_5x5/p03.json", output)
+        self.assertIn("11.7 (0-18)", output)
         self.assertIn("demo_cases/ambiguous.json", output)
         self.assertIn("demo_cases/inconsistent.json", output)
 
