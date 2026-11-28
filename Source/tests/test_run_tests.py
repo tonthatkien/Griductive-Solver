@@ -79,6 +79,7 @@ class RunTestsDiscoveryAndValidationTests(unittest.TestCase):
                 "demo_extra/a.json",
                 "demo_cases/b.json",
                 "demo_cases/a.json",
+                "not_found/z.json",
             ):
                 _write_json(root / rel, {})
             default_got = [f"{p.parent.name}/{p.name}" for p in discover(root)]
@@ -94,6 +95,7 @@ class RunTestsDiscoveryAndValidationTests(unittest.TestCase):
                 "demo_cases/a.json",
                 "demo_cases/b.json",
                 "demo_extra/a.json",
+                "not_found/z.json",
             ],
         )
 
@@ -101,13 +103,17 @@ class RunTestsDiscoveryAndValidationTests(unittest.TestCase):
         default_paths = discover(DATA_DIR)
         with_demo = discover(DATA_DIR, include_demo=True)
         self.assertTrue(default_paths)
-        self.assertFalse(any(p.parent.name.startswith("demo_") for p in default_paths))
+        self.assertTrue(all(p.parent.name.startswith("puzzles_") for p in default_paths))
         self.assertEqual(with_demo[:len(default_paths)], default_paths)
         demos = [f"{p.parent.name}/{p.name}" for p in with_demo[len(default_paths):]]
         self.assertTrue(demos)
-        self.assertTrue(all(item.startswith("demo_") for item in demos))
+        self.assertTrue(all(item.startswith(("demo_", "not_found/")) for item in demos))
         self.assertTrue(
-            {"demo_cases/ambiguous.json", "demo_cases/inconsistent.json"}.issubset(demos)
+            {
+                "demo_cases/ambiguous.json",
+                "demo_cases/inconsistent.json",
+                "not_found/not_found_3x3.json",
+            }.issubset(demos)
         )
         self.assertEqual(demos, sorted(demos, key=lambda item: tuple(item.split("/", 1))))
 
@@ -578,6 +584,16 @@ class RunTestsStatusRowsTests(unittest.TestCase):
                 row = run_one(DATA_DIR / rel_path, timeout=10)
                 self.assertEqual(row["status"], expected_status)
                 self.assertEqual(row["unique"], expected_unique)
+                self.assertEqual(row["deduction_steps"], 0)
+
+    def test_bundled_not_found_puzzles_are_stuck_and_ambiguous(self) -> None:
+        paths = sorted((DATA_DIR / "not_found").glob("*.json"))
+        self.assertEqual(len(paths), 3)
+        for path in paths:
+            with self.subTest(puzzle=path.name):
+                row = run_one(path, timeout=10)
+                self.assertEqual(row["status"], "STUCK")
+                self.assertEqual(row["unique"], "MULTIPLE")
                 self.assertEqual(row["deduction_steps"], 0)
 
 
