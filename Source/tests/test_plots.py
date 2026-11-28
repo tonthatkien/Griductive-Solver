@@ -67,7 +67,7 @@ def _write_csv(path: Path, rows: list[dict[str, object]]) -> Path:
 
 
 class PlotsCsvAndMergeTests(unittest.TestCase):
-    """Kiểm tra đọc CSV, tính median/min/max runtime và bắt sai lệch giữa các lần chạy."""
+    """Kiểm tra đọc CSV, tính trung bình/min/max runtime và bắt sai lệch giữa các lần chạy."""
 
     def test_load_rows_parses_numbers_and_preserves_blanks(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -86,7 +86,7 @@ class PlotsCsvAndMergeTests(unittest.TestCase):
         self.assertIs(type(row["runtime_sec"]), float)
         self.assertAlmostEqual(float(row["runtime_sec"]), 0.25)
 
-    def test_merge_runs_computes_runtime_median_min_and_max(self) -> None:
+    def test_merge_runs_computes_runtime_mean_min_and_max(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             runtimes = (0.50, 0.10, 0.90, 0.20, 0.30)
@@ -98,7 +98,7 @@ class PlotsCsvAndMergeTests(unittest.TestCase):
 
         self.assertEqual(len(merged), 1)
         row = merged[0]
-        self.assertAlmostEqual(float(row["runtime_median"]), 0.30)
+        self.assertAlmostEqual(float(row["runtime_mean"]), 0.40)
         self.assertAlmostEqual(float(row["runtime_min"]), 0.10)
         self.assertAlmostEqual(float(row["runtime_max"]), 0.90)
         self.assertNotIn("runtime_sec", row)
@@ -187,11 +187,11 @@ class PlotsSummaryFailureAndMarkdownTests(unittest.TestCase):
 
     def test_to_markdown_rounds_floats_to_three_decimals(self) -> None:
         md = to_markdown(
-            [{"puzzle": "p01", "size": 3, "runtime_median": 0.123456, "note": ""}],
-            ["puzzle", "size", "runtime_median", "note"],
+            [{"puzzle": "p01", "size": 3, "runtime_mean": 0.123456, "note": ""}],
+            ["puzzle", "size", "runtime_mean", "note"],
         )
         lines = md.splitlines()
-        self.assertEqual(lines[0], "| puzzle | size | runtime_median | note |")
+        self.assertEqual(lines[0], "| puzzle | size | runtime_mean | note |")
         self.assertEqual(lines[1], "| --- | --- | --- | --- |")
         self.assertEqual(lines[2], "| p01 | 3 | 0.123 |  |")
 
@@ -227,7 +227,7 @@ class PlotsSummaryFailureAndMarkdownTests(unittest.TestCase):
         self.assertIn("### Chi tiết từng bài", output)
         self.assertIn("### Tổng hợp theo kích thước", output)
         self.assertIn("### Failure cases", output)
-        self.assertIn("runtime_median_mean", output)
+        self.assertIn("runtime_mean", output)
         self.assertIn("9 (9-9)", output)
         self.assertIn("0 (0-0)", output)
         self.assertIn("demo_cases/ambiguous.json", output)

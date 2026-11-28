@@ -12,31 +12,31 @@ python experiments/run_tests.py --include-demo --out experiments/results_demo.cs
 python experiments/plots.py
 ```
 
-Bộ chính chạy lặp 5 lần để lấy trung vị và khoảng min-max của `runtime_sec`. Số liệu đo trên cùng mã nguồn solver với `main` (`ca27a46`), lưu tại `Source/experiments/runs/run_1..5.csv` và `Source/experiments/results_demo.csv` ở commit `f4e469a`. Định nghĩa 15 cột CSV xem tại `docs/INTERFACES.md` mục 5.
+Bộ chính chạy lặp 5 lần để lấy trung bình và khoảng min-max của `runtime_sec`. Số liệu đo trên cùng mã nguồn solver với `main` (`ca27a46`), lưu tại `Source/experiments/runs/run_1..5.csv` và `Source/experiments/results_demo.csv` ở commit `f4e469a`. Định nghĩa 15 cột CSV xem tại `docs/INTERFACES.md` mục 5.
 
 ## 2. Bảng kết quả
 
 ### Chi tiết từng bài (5 lần chạy)
 
-| puzzle | size | status | unique | primary_vars | aux_vars | clauses | sat_calls | trace_sat_calls | untraced_sat_calls | decisions | propagations | backtracks | deduction_steps | runtime_median | runtime_min | runtime_max |
+| puzzle | size | status | unique | primary_vars | aux_vars | clauses | sat_calls | trace_sat_calls | untraced_sat_calls | decisions | propagations | backtracks | deduction_steps | runtime_mean | runtime_min | runtime_max |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| puzzles_3x3/p01.json | 3 | SOLVED | UNIQUE | 9 | 0 | 30 | 49 | 30 | 19 | 0 | 271 | 0 | 7 | 0.011 | 0.011 | 0.014 |
+| puzzles_3x3/p01.json | 3 | SOLVED | UNIQUE | 9 | 0 | 30 | 49 | 30 | 19 | 0 | 271 | 0 | 7 | 0.012 | 0.011 | 0.014 |
 | puzzles_3x3/p02.json | 3 | SOLVED | UNIQUE | 9 | 17 | 92 | 47 | 27 | 20 | 16 | 376 | 0 | 7 | 0.026 | 0.023 | 0.030 |
-| puzzles_3x3/p03.json | 3 | SOLVED | UNIQUE | 9 | 18 | 107 | 71 | 50 | 21 | 11 | 586 | 0 | 8 | 0.038 | 0.036 | 0.048 |
-| puzzles_4x4/p01.json | 4 | SOLVED | UNIQUE | 16 | 51 | 240 | 163 | 126 | 37 | 358 | 5527 | 15 | 14 | 0.861 | 0.795 | 0.953 |
-| puzzles_4x4/p02.json | 4 | SOLVED | UNIQUE | 16 | 63 | 308 | 131 | 92 | 39 | 44 | 2331 | 0 | 14 | 0.372 | 0.348 | 0.511 |
-| puzzles_4x4/p03.json | 4 | SOLVED | UNIQUE | 16 | 42 | 196 | 201 | 160 | 41 | 54 | 3322 | 6 | 15 | 0.388 | 0.343 | 0.472 |
-| puzzles_5x5/p01.json | 5 | SOLVED | UNIQUE | 25 | 163 | 778 | 383 | 318 | 65 | 864 | 16139 | 121 | 24 | 6.674 | 5.606 | 7.349 |
-| puzzles_5x5/p02.json | 5 | SOLVED | UNIQUE | 25 | 95 | 499 | 301 | 237 | 64 | 299 | 11881 | 48 | 24 | 4.492 | 4.242 | 5.147 |
-| puzzles_5x5/p03.json | 5 | SOLVED | UNIQUE | 25 | 204 | 815 | 433 | 370 | 63 | 1224 | 23632 | 137 | 23 | 8.567 | 8.369 | 10.071 |
+| puzzles_3x3/p03.json | 3 | SOLVED | UNIQUE | 9 | 18 | 107 | 71 | 50 | 21 | 11 | 586 | 0 | 8 | 0.040 | 0.036 | 0.048 |
+| puzzles_4x4/p01.json | 4 | SOLVED | UNIQUE | 16 | 51 | 240 | 163 | 126 | 37 | 358 | 5527 | 15 | 14 | 0.868 | 0.795 | 0.953 |
+| puzzles_4x4/p02.json | 4 | SOLVED | UNIQUE | 16 | 63 | 308 | 131 | 92 | 39 | 44 | 2331 | 0 | 14 | 0.403 | 0.348 | 0.511 |
+| puzzles_4x4/p03.json | 4 | SOLVED | UNIQUE | 16 | 42 | 196 | 201 | 160 | 41 | 54 | 3322 | 6 | 15 | 0.391 | 0.343 | 0.472 |
+| puzzles_5x5/p01.json | 5 | SOLVED | UNIQUE | 25 | 163 | 778 | 383 | 318 | 65 | 864 | 16139 | 121 | 24 | 6.487 | 5.606 | 7.349 |
+| puzzles_5x5/p02.json | 5 | SOLVED | UNIQUE | 25 | 95 | 499 | 301 | 237 | 64 | 299 | 11881 | 48 | 24 | 4.621 | 4.242 | 5.147 |
+| puzzles_5x5/p03.json | 5 | SOLVED | UNIQUE | 25 | 204 | 815 | 433 | 370 | 63 | 1224 | 23632 | 137 | 23 | 9.124 | 8.369 | 10.071 |
 
 ### Tổng hợp theo kích thước
 
-| size | status | primary_vars | aux_vars | clauses | sat_calls | trace_sat_calls | untraced_sat_calls | decisions | propagations | backtracks | deduction_steps | runtime_median_mean |
+| size | status | primary_vars | aux_vars | clauses | sat_calls | trace_sat_calls | untraced_sat_calls | decisions | propagations | backtracks | deduction_steps | runtime_mean |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 3x3 | SOLVED=3 | 9 (9-9) | 11.7 (0-18) | 76.3 (30-107) | 55.7 (47-71) | 35.7 (27-50) | 20 (19-21) | 9 (0-16) | 411 (271-586) | 0 (0-0) | 7.3 (7-8) | 0.025 (0.011-0.038) |
-| 4x4 | SOLVED=3 | 16 (16-16) | 52 (42-63) | 248 (196-308) | 165 (131-201) | 126 (92-160) | 39 (37-41) | 152 (44-358) | 3726.7 (2331-5527) | 7 (0-15) | 14.3 (14-15) | 0.540 (0.372-0.861) |
-| 5x5 | SOLVED=3 | 25 (25-25) | 154 (95-204) | 697.3 (499-815) | 372.3 (301-433) | 308.3 (237-370) | 64 (63-65) | 795.7 (299-1224) | 17217.3 (11881-23632) | 102 (48-137) | 23.7 (23-24) | 6.578 (4.492-8.567) |
+| 3x3 | SOLVED=3 | 9 (9-9) | 11.7 (0-18) | 76.3 (30-107) | 55.7 (47-71) | 35.7 (27-50) | 20 (19-21) | 9 (0-16) | 411 (271-586) | 0 (0-0) | 7.3 (7-8) | 0.026 (0.012-0.040) |
+| 4x4 | SOLVED=3 | 16 (16-16) | 52 (42-63) | 248 (196-308) | 165 (131-201) | 126 (92-160) | 39 (37-41) | 152 (44-358) | 3726.7 (2331-5527) | 7 (0-15) | 14.3 (14-15) | 0.554 (0.391-0.868) |
+| 5x5 | SOLVED=3 | 25 (25-25) | 154 (95-204) | 697.3 (499-815) | 372.3 (301-433) | 308.3 (237-370) | 64 (63-65) | 795.7 (299-1224) | 17217.3 (11881-23632) | 102 (48-137) | 23.7 (23-24) | 6.744 (4.621-9.124) |
 
 Cả 9 bài chuẩn đều kết thúc với `status = SOLVED` và `unique = UNIQUE`. Toàn bộ 10 cột đếm (`primary_vars`, `aux_vars`, `clauses`, `sat_calls`, `trace_sat_calls`, `untraced_sat_calls`, `decisions`, `propagations`, `backtracks`, `deduction_steps`) cho giá trị giống hệt nhau qua 5 lần chạy.
 
@@ -44,7 +44,7 @@ Cả 9 bài chuẩn đều kết thúc với `status = SOLVED` và `unique = UNI
 
 ![Thời gian chạy theo số mệnh đề CNF](image/runtime_vs_clauses.png)
 
-Trung vị thời gian chạy (`runtime_median`, thang log kèm khoảng `runtime_min` đến `runtime_max`) tăng theo `clauses` từ nhóm `3×3` lên `4×4` và `5×5`.
+Thời gian chạy trung bình 5 lần (`runtime_mean`, thang log kèm khoảng `runtime_min` đến `runtime_max`) tăng theo `clauses` từ nhóm `3×3` lên `4×4` và `5×5`.
 
 ![Số lần gọi SAT trong và ngoài trace theo từng bài](image/sat_calls.png)
 
@@ -62,9 +62,9 @@ Số `primary_vars` cố định theo diện tích lưới (`9`, `16`, `25`), c�
 
 ### Quan hệ giữa runtime, `clauses` và bộ đếm tìm kiếm
 
-Từ `3×3` lên `5×5`, trung bình `clauses` tăng khoảng 9.1 lần (`76.3` lên `697.3`), trong khi `runtime_median_mean` tăng khoảng 263 lần (`0.025s` lên `0.540s` ở `4×4` và `6.578s` ở `5×5`). Runtime tăng nhanh hơn `clauses` vì cùng lúc tăng cả `sat_calls` (`55.7` lên `372.3`) và `decisions` (`9` lên `795.7`).
+Từ `3×3` lên `5×5`, trung bình `clauses` tăng khoảng 9.1 lần (`76.3` lên `697.3`), trong khi `runtime_mean` tăng khoảng 260 lần (`0.026s` lên `0.554s` ở `4×4` và `6.744s` ở `5×5`). Runtime tăng nhanh hơn `clauses` vì cùng lúc tăng cả `sat_calls` (`55.7` lên `372.3`) và `decisions` (`9` lên `795.7`).
 
-Trong cùng nhóm `4×4`, `puzzles_4x4/p01.json` có `clauses = 240` (nhỏ hơn `308` của `p02`) và `sat_calls = 163` (nhỏ hơn `201` của `p03`), nhưng `runtime_median` lên tới `0.861s`, hơn gấp đôi `0.372s` của `p02` và `0.388s` của `p03`. Cột `decisions` và `backtracks` khớp với chênh lệch này: `4x4/p01` có `decisions = 358`, `backtracks = 15` và `propagations = 5527`, trong khi `4x4/p02` chỉ có `44` / `0` / `2331` và `4x4/p03` có `54` / `6` / `3322`. Ở nhóm `5×5`, thứ tự thời gian chạy cũng đi cùng chiều với `decisions` và `backtracks`: `p02` (`299`, `48`, `4.492s`) đứng trước `p01` (`864`, `121`, `6.674s`) rồi đến `p03` (`1224`, `137`, `8.567s`).
+Trong cùng nhóm `4×4`, `puzzles_4x4/p01.json` có `clauses = 240` (nhỏ hơn `308` của `p02`) và `sat_calls = 163` (nhỏ hơn `201` của `p03`), nhưng `runtime_mean` lên tới `0.868s`, hơn gấp đôi `0.403s` của `p02` và `0.391s` của `p03`. Cột `decisions` và `backtracks` khớp với chênh lệch này: `4x4/p01` có `decisions = 358`, `backtracks = 15` và `propagations = 5527`, trong khi `4x4/p02` chỉ có `44` / `0` / `2331` và `4x4/p03` có `54` / `6` / `3322`. Ở nhóm `5×5`, thứ tự thời gian chạy cũng đi cùng chiều với `decisions` và `backtracks`: `p02` (`299`, `48`, `4.621s`) đứng trước `p01` (`864`, `121`, `6.487s`) rồi đến `p03` (`1224`, `137`, `9.124s`).
 
 ### Tỉ lệ `untraced_sat_calls / sat_calls`
 
@@ -90,6 +90,6 @@ Với `--timeout 30`, cả 9 bài chính đều `SOLVED` nên bảng trên khôn
 ## 6. Hạn chế
 
 - Mỗi kích thước `3×3`, `4×4`, `5×5` mới có 3 puzzle chuẩn, còn tập demo hiện chỉ có 2 ca dừng ngay từ bước 0 và chưa có ca dừng `STUCK` giữa chừng.
-- Tất cả lần chạy thực hiện trên cùng một máy, nên `runtime_median`, `runtime_min` và `runtime_max` chỉ dùng để so sánh giữa các bài trong cùng bộ đo.
+- Tất cả lần chạy thực hiện trên cùng một máy, nên `runtime_mean`, `runtime_min` và `runtime_max` chỉ dùng để so sánh giữa các bài trong cùng bộ đo.
 - Cờ `--timeout` giới hạn từng truy vấn `DPLLSolver.solve` riêng lẻ thay vì tổng thời gian của một puzzle; đồng thời `runtime_sec` trong `run_tests.py` đo trọn từ lúc nạp file đến khi kết thúc `auto_solve`, bao gồm chi phí dựng lại CNF ở từng bước và các truy vấn kiểm chứng của `GameEngine.submit_verdict` (tách riêng `uniqueness_check`).
-- Trong `Source/logic/cnf_encoder.py`, các clue đếm (`AT_MOST`, `AT_LEAST`, `EXACTLY`) liệt kê tổ hợp mệnh đề (`C(m, k+1)` và `C(m, m-k+1)`), còn `COMPARE` tạo `|R|(|R|+1)/2` biến phụ mỗi vùng. Với ca stress `5×5`, KB đạt tới `204` biến phụ và `815` mệnh đề, đi kèm thời gian chạy trung vị `8.567s` (`10.071s` ở lần chậm nhất).
+- Trong `Source/logic/cnf_encoder.py`, các clue đếm (`AT_MOST`, `AT_LEAST`, `EXACTLY`) liệt kê tổ hợp mệnh đề (`C(m, k+1)` và `C(m, m-k+1)`), còn `COMPARE` tạo `|R|(|R|+1)/2` biến phụ mỗi vùng. Với ca stress `5×5`, KB đạt tới `204` biến phụ và `815` mệnh đề, đi kèm thời gian chạy trung bình `9.124s` (`10.071s` ở lần chậm nhất).

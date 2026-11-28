@@ -11,7 +11,7 @@ import argparse
 import csv
 import sys
 from pathlib import Path
-from statistics import fmean, median
+from statistics import fmean
 from typing import Any, Sequence
 
 EXPERIMENTS_DIR = Path(__file__).resolve().parent
@@ -71,11 +71,11 @@ DETAIL_COLUMNS = (
     "status",
     "unique",
     *COUNT_COLS,
-    "runtime_median",
+    "runtime_mean",
     "runtime_min",
     "runtime_max",
 )
-SUMMARY_COLUMNS = ("size", "status", *COUNT_COLS, "runtime_median_mean")
+SUMMARY_COLUMNS = ("size", "status", *COUNT_COLS, "runtime_mean")
 FAILURE_COLUMNS = ("puzzle", "size", "status", "unique", *COUNT_COLS, "runtime_sec")
 
 
@@ -142,7 +142,7 @@ def merge_runs(run_paths: Sequence[Path | str]) -> list[dict[str, object]]:
 
         item = {k: v for k, v in base.items() if k != "runtime_sec"}
         runtimes = [float(r["runtime_sec"]) for r in matched if r.get("runtime_sec", "") != ""]
-        item["runtime_median"] = median(runtimes) if runtimes else ""
+        item["runtime_mean"] = fmean(runtimes) if runtimes else ""
         item["runtime_min"] = min(runtimes) if runtimes else ""
         item["runtime_max"] = max(runtimes) if runtimes else ""
         merged.append(item)
@@ -190,7 +190,7 @@ def summary_by_size(rows: Sequence[dict[str, object]]) -> list[dict[str, object]
             item[f"{col}_max"] = max_val
 
         rt_vals = [
-            row["runtime_median"] if "runtime_median" in row else row.get("runtime_sec", "")
+            row["runtime_mean"] if "runtime_mean" in row else row.get("runtime_sec", "")
             for row in group
         ]
         rt_nums = [v for v in rt_vals if v != ""]
@@ -252,7 +252,7 @@ def _format_summary_rows(groups: Sequence[dict[str, object]]) -> list[dict[str, 
                 mean_str = _format_count_mean(float(mean_val))
                 row[col] = f"{mean_str} ({g[f'{col}_min']}-{g[f'{col}_max']})"
         rt_mean = g["runtime_mean"]
-        row["runtime_median_mean"] = (
+        row["runtime_mean"] = (
             ""
             if rt_mean == ""
             else f"{rt_mean:.3f} ({g['runtime_min']:.3f}-{g['runtime_max']:.3f})"
@@ -291,7 +291,7 @@ def _style_axes(ax: Any, grid_axis: str = "y") -> None:
 
 
 def _runtime_bounds(row: dict[str, object]) -> tuple[float, float, float] | None:
-    rt = row["runtime_median"] if "runtime_median" in row else row.get("runtime_sec", "")
+    rt = row["runtime_mean"] if "runtime_mean" in row else row.get("runtime_sec", "")
     if rt == "":
         return None
     rt_val = float(rt)
@@ -343,7 +343,7 @@ def _plot_runtime_vs_clauses(
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: f"{v:g}"))
     ax.set_title("Thời gian chạy theo số mệnh đề CNF")
     ax.set_xlabel("Số mệnh đề CNF (clauses)")
-    ax.set_ylabel("Thời gian chạy trung vị (giây, thang log)")
+    ax.set_ylabel("Thời gian chạy trung bình 5 lần (giây, thang log)")
     ax.legend(title="Kích thước (thanh lỗi: min-max)", frameon=True)
     _style_axes(ax, grid_axis="both")
     fig.savefig(out_path, dpi=150, facecolor="white")
