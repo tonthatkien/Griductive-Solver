@@ -285,6 +285,28 @@ class PlotsSummaryFailureAndMarkdownTests(unittest.TestCase):
                 self.assertTrue(raw.startswith(b"\x89PNG\r\n\x1a\n"))
                 self.assertGreater(len(raw), 1000)
 
+    @unittest.skipUnless(HAS_MATPLOTLIB, "matplotlib chưa được cài đặt")
+    def test_plot_all_handles_blank_cells_without_turning_them_into_zero(self) -> None:
+        rows = [
+            _make_row(puzzle="puzzles_3x3/p01.json", size=3, decisions=0, backtracks=0),
+            _make_row(
+                puzzle="puzzles_4x4/p01.json",
+                size=4,
+                status="ERROR",
+                clauses="",
+                trace_sat_calls="",
+                untraced_sat_calls="",
+                decisions="",
+                propagations="",
+                backtracks="",
+                runtime_sec="",
+            ),
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = plot_all(rows, tmp)
+            self.assertEqual(len(paths), 3)
+            self.assertTrue(all(p.is_file() for p in paths))
+
     def test_cli_tables_on_repo_csvs(self) -> None:
         self.assertTrue(all(Path(p).is_file() for p in DEFAULT_RUN_PATHS))
         self.assertTrue(Path(DEFAULT_DEMO_PATH).is_file())

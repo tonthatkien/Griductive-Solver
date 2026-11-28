@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import sys
 from pathlib import Path
 from statistics import fmean, median
@@ -300,6 +301,47 @@ def _runtime_bounds(row: dict[str, object]) -> tuple[float, float, float] | None
     return rt_val, max(0.0, rt_val - lo), max(0.0, hi - rt_val)
 
 
+def _label_offset(
+    point_idx: int,
+    nx: float,
+    ny: float,
+    occupied: list[tuple[float, float]],
+) -> tuple[int, int]:
+    candidates = ((5, 5), (5, -10), (-22, 5), (-22, -10), (5, 13), (-22, 13))
+    if nx > 0.9:
+        candidates = ((-22, 5), (-22, -10), (5, 5), (5, -10), (-22, 13), (5, 13))
+    if ny < 0.05:
+        candidates = tuple(c for c in candidates if c[1] > 0) or candidates
+    others = [pt for i, pt in enumerate(occupied) if i != point_idx]
+    best, best_dist = candidates[0], -1.0
+    for dx, dy in candidates:
+        lx, ly = nx + dx / 420.0, ny + dy / 260.0
+        dist = min((abs(lx - ox) / 0.07 + abs(ly - oy) / 0.06) for ox, oy in others)
+        if all(abs(lx - ox) >= 0.07 or abs(ly - oy) >= 0.06 for ox, oy in others):
+            occupied.append((lx, ly))
+            return dx, dy
+        if dist > best_dist:
+            best_dist, best = dist, (dx, dy)
+    occupied.append((nx + best[0] / 420.0, ny + best[1] / 260.0))
+    return best
+
+
+def _annotate_scatter(ax: Any, points: Sequence[tuple[int, float, str]]) -> None:
+    if len(points) <= 1:
+        for x, y, label in points:
+            ax.annotate(label, (x, y), xytext=(5, 5), textcoords="offset points", fontsize=8)
+        return
+    xs = [p[0] for p in points]
+    log_ys = [math.log10(p[1]) for p in points]
+    x_min, x_span = min(xs), max(max(xs) - min(xs), 1)
+    y_min, y_span = min(log_ys), max(max(log_ys) - min(log_ys), 1.0)
+    normed = [((x - x_min) / x_span, (ly - y_min) / y_span) for x, ly in zip(xs, log_ys)]
+    occupied = list(normed)
+    for idx, ((x, y, label), (nx, ny)) in enumerate(zip(points, normed)):
+        dx, dy = _label_offset(idx, nx, ny, occupied)
+        ax.annotate(label, (x, y), xytext=(dx, dy), textcoords="offset points", fontsize=8)
+
+
 def _plot_runtime_vs_clauses(
     plt: Any,
     ticker: Any,
@@ -308,36 +350,29 @@ def _plot_runtime_vs_clauses(
 ) -> None:
     fig, ax = plt.subplots(figsize=(7.5, 4.8), constrained_layout=True)
     sizes = sorted({int(r["size"]) for r in rows if isinstance(r.get("size"), int)})
+    all_points: list[tuple[int, float, str]] = []
     for size in sizes:
         pts = [r for r in rows if r.get("size") == size and r.get("clauses", "") != ""]
-        xs, ys, err_lo, err_hi, labels = [], [], [], [], []
+        xs, ys, err_lo, err_hi = [], [], [], []
         for r in pts:
             bounds = _runtime_bounds(r)
-            if bounds is None:
+            if bounds is None or bounds[0] <= 0:
                 continue
-            xs.append(int(r["clauses"]))
+            x_val = int(r["clauses"])
+            xs.append(x_val)
             ys.append(bounds[0])
             err_lo.append(bounds[1])
             err_hi.append(bounds[2])
-            labels.append(_short_puzzle_name(r["puzzle"]).split("/")[-1])
+            all_points.append((x_val, bounds[0], _short_puzzle_name(r["puzzle"]).split("/")[-1]))
         if not xs:
             continue
-        color = SIZE_COLORS.get(size, "#555555")
         ax.errorbar(
-            xs,
-            ys,
-            yerr=[err_lo, err_hi],
-            fmt=SIZE_MARKERS.get(size, "o"),
-            color=color,
-            capsize=3,
-            markersize=6,
-            linewidth=1.2,
-            label=f"{size}×{size}",
+            xs, ys, yerr=[err_lo, err_hi], fmt=SIZE_MARKERS.get(size, "o"),
+            color=SIZE_COLORS.get(size, "#555555"), capsize=3, markersize=6,
+            linewidth=1.2, label=f"{size}×{size}",
         )
-        for idx, (x, y, label) in enumerate(zip(xs, ys, labels)):
-            dy = -10 if (size == 3 and idx == 1) or (size == 5 and idx == 0) else 6
-            ax.annotate(label, (x, y), xytext=(4, dy), textcoords="offset points", fontsize=8)
 
+    _annotate_scatter(ax, all_points)
     ax.set_yscale("log")
     ax.yaxis.set_major_formatter(ticker.FuncFormatter(lambda v, _: f"{v:g}"))
     ax.set_title("Thời gian chạy theo số mệnh đề CNF")
@@ -410,12 +445,17 @@ def _plot_dpll_counters(
         for r in rows
     ]
     for ax, (col, title) in zip(axes, panels):
-        vals = [int(r[col]) if r.get(col, "") != "" else 0 for r in rows]
-        ax.bar(range(len(rows)), vals, width=0.66, color=colors, alpha=0.9)
+        raw_vals = [r.get(col, "") for r in rows]
+        num_vals = [int(v) for v in raw_vals if v != ""]
+        top = max(num_vals) if num_vals else 1
         ax.set_yscale("symlog", linthresh=1)
-        top = max(vals) if vals else 1
         ax.set_ylim(0, max(top * 2.4, 10))
-        for idx, val in enumerate(vals):
+        for idx, (raw, color) in enumerate(zip(raw_vals, colors)):
+            if raw == "":
+                ax.text(idx, 0.12, "—", ha="center", va="bottom", fontsize=8, color="#777777")
+                continue
+            val = int(raw)
+            ax.bar(idx, val, width=0.66, color=color, alpha=0.9)
             if val == 0:
                 ax.text(idx, 0.12, "0", ha="center", va="bottom", fontsize=7.5, color="#444444")
         ax.set_title(title)
