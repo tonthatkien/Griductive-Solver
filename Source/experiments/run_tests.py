@@ -8,9 +8,11 @@ cố ý mơ hồ để demo solver không giải ra, thường cho `STUCK` và `
 Các bài `not_found` được xếp cuối bảng và vẫn ghi đầy đủ như mọi bài khác.
 
 Tham số `--timeout` giới hạn thời gian (giây) cho từng truy vấn DPLL; mỗi bài
-có thể gọi DPLL nhiều lần. Cột `status` ghi một trong năm giá trị: `SOLVED`,
-`STUCK`, `INCONSISTENT`, `TIMEOUT`, `ERROR`. Khi một bài gặp lỗi hoặc hết giờ,
-script ghi dòng kết quả đó rồi chạy tiếp các bài sau.
+có thể gọi DPLL nhiều lần. Cờ `--include-demo` chạy thêm các file trong
+`demo_*/*.json` và `not_found/*.json` sau bộ puzzle chính (mặc định bỏ qua).
+`not_found/` chứa các bài thiếu manh mối, agent dừng ở `STUCK`. Cột `status` ghi một
+trong năm giá trị: `SOLVED`, `STUCK`, `INCONSISTENT`, `TIMEOUT`, `ERROR`. Khi
+một bài gặp lỗi hoặc hết giờ, script ghi dòng kết quả đó rồi chạy tiếp các bài sau.
 
 Cách đếm các cột kết quả:
 - `unique`: kiểm tra bằng `uniqueness_check` trên toàn bộ clue của file JSON
@@ -72,6 +74,7 @@ DEFAULT_OUT_PATH = SOURCE_DIR / "experiments" / "results.csv"
 DEFAULT_TIMEOUT = 30.0
 ERROR = "ERROR"
 UNIQUE, MULTIPLE = "UNIQUE", "MULTIPLE"
+DEMO_PATTERNS = ("demo_*/*.json", "not_found/*.json")
 
 FIELDNAMES = (
     "puzzle",
@@ -100,12 +103,25 @@ def _puzzle_sort_key(path: Path) -> tuple[int, int, str, str]:
     return (1, 0, path.name, folder)
 
 
-def discover(data_dir: Path | str) -> list[Path]:
-    """Trả danh sách file puzzle: `puzzles_*` theo kích thước rồi tên file, `not_found/` xếp cuối."""
+def discover(data_dir: Path | str, include_demo: bool = False) -> list[Path]:
+    """Trả puzzle sắp theo kích thước rồi tên file; bật demo thì thêm demo_*, not_found ở cuối."""
     root = Path(data_dir)
-    paths = [p for p in root.glob("puzzles_*/*.json") if p.is_file()]
-    paths += [p for p in root.glob("not_found/*.json") if p.is_file()]
-    return sorted(paths, key=_puzzle_sort_key)
+    paths = sorted(
+        (p for p in root.glob("puzzles_*/*.json") if p.is_file()),
+        key=_puzzle_sort_key,
+    )
+    if not include_demo:
+        return paths
+    demos = sorted(
+        (
+            p
+            for pattern in DEMO_PATTERNS
+            for p in root.glob(pattern)
+            if p.is_file()
+        ),
+        key=lambda p: (p.parent.name, p.name),
+    )
+    return paths + demos
 
 
 def _parse_timeout(raw: str) -> float:
@@ -243,7 +259,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Chạy thực nghiệm solver trên bộ puzzle.")
     parser.add_argument(
         "--data", type=Path, default=DEFAULT_DATA_DIR,
-        help="Thư mục chứa puzzles_* và not_found",
+        help="Thư mục chứa puzzles_*, demo_* và not_found",
     )
     parser.add_argument(
         "--out", type=Path, default=DEFAULT_OUT_PATH, help="Đường dẫn file CSV kết quả"
@@ -254,11 +270,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=DEFAULT_TIMEOUT,
         help="Giới hạn giây cho mỗi truy vấn DPLL (0 = timeout ngay)",
     )
+    parser.add_argument(
+        "--include-demo",
+        action="store_true",
+        help="Chạy thêm các file demo_*/*.json và not_found/*.json sau bộ puzzle chính",
+    )
     args = parser.parse_args(argv)
     if not args.data.is_dir():
         parser.error(f"Thư mục dữ liệu không tồn tại: {args.data}")
 
-    paths = discover(args.data)
+    paths = discover(args.data, include_demo=args.include_demo)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     with args.out.open("w", encoding="utf-8", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=FIELDNAMES, restval="")

@@ -174,6 +174,16 @@ class GameEngine:
         self._require_loaded()
         return cell in self._revealed
 
+    @property
+    def unsolved_cells(self) -> List[str]:
+        """Các ô chưa lật, thứ tự row-major."""
+        self._require_loaded()
+        return [c for c in board.all_cells(self._n) if c not in self._revealed]
+
+    def is_solved(self) -> bool:
+        """True nếu mọi thẻ đã lật."""
+        return not self.unsolved_cells
+    
     def get_public_kb(self) -> PublicKB:
         """PublicKB hiện tại: clue + verdict đã chứng minh của các thẻ đã lật (row-major).
 
